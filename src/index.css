@@ -126,17 +126,17 @@
   }
 }
 
-/* F1 Car Animation */
-@keyframes f1-drive {
+/* F1 Car Animation - Loop */
+@keyframes f1-drive-loop {
   0% {
     transform: translateX(-150px);
     opacity: 0;
   }
-  10% {
-    opacity: 0.6;
+  5% {
+    opacity: 0.5;
   }
-  90% {
-    opacity: 0.6;
+  95% {
+    opacity: 0.5;
   }
   100% {
     transform: translateX(calc(100vw + 150px));
@@ -144,8 +144,8 @@
   }
 }
 
-.f1-car-animation {
-  animation: f1-drive 7s ease-in-out forwards;
+.f1-car-loop {
+  animation: f1-drive-loop 12s ease-in-out infinite;
   pointer-events: none;
 }
 
