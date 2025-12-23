@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { CheckCircle, TrendingUp, Target, Users, Clock } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import logo from "@/assets/logo.png";
 
 const Results = () => {
   // Mock result data
@@ -41,16 +42,18 @@ const Results = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <span className="text-sm font-bold text-primary-foreground">IV</span>
-            </div>
-            <span className="text-lg font-semibold text-foreground">Idea Verdict</span>
+          <Link to="/" className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Idea Verdict" 
+              className="h-10 md:h-12 w-auto"
+              style={{ filter: 'hue-rotate(-10deg)' }}
+            />
           </Link>
 
           <Link
             to="/dashboard"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
           >
             View All Ideas
           </Link>
@@ -58,14 +61,16 @@ const Results = () => {
       </header>
 
       {/* Main Content */}
-      <main className="bg-gradient-to-r from-primary/5 via-background to-background">
+      <main className="bg-gradient-to-r from-primary/8 via-primary/3 to-background min-h-[calc(100vh-64px)]">
         <div className="container mx-auto px-4 py-8 md:py-12">
           <div className="mx-auto max-w-3xl">
             {/* Verdict Card */}
-            <div className="mb-8 rounded-xl border border-border/50 bg-card p-6 shadow-sm md:p-8">
+            <div className="mb-8 rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-6 shadow-lg md:p-8">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="h-8 w-8 text-primary" />
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <CheckCircle className="h-8 w-8 text-primary" />
+                  </div>
                   <span className="text-2xl font-bold text-primary md:text-3xl">
                     {result.verdict}
                   </span>
@@ -95,19 +100,19 @@ const Results = () => {
                 return (
                   <div
                     key={item.title}
-                    className="rounded-xl border border-border/50 bg-card p-5 shadow-sm"
+                    className="group rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/30 transition-all duration-300"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
                           <Icon className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground">{item.title}</h3>
+                          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{item.title}</h3>
                           <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
                         </div>
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">
+                      <span className="text-sm font-medium text-primary">
                         {item.score}/100
                       </span>
                     </div>

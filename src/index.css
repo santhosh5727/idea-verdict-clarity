@@ -7,25 +7,25 @@
 @layer base {
   :root {
     --background: 120 20% 99%;
-    --foreground: 220 20% 10%;
+    --foreground: 160 25% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 160 25% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
+    --popover-foreground: 160 25% 10%;
 
-    --primary: 142 71% 45%;
+    --primary: 168 60% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 120 10% 96%;
-    --secondary-foreground: 220 20% 20%;
+    --secondary: 165 20% 96%;
+    --secondary-foreground: 160 25% 15%;
 
-    --muted: 120 10% 96%;
-    --muted-foreground: 220 10% 50%;
+    --muted: 165 15% 96%;
+    --muted-foreground: 160 15% 45%;
 
-    --accent: 120 10% 94%;
-    --accent-foreground: 220 20% 10%;
+    --accent: 165 25% 94%;
+    --accent-foreground: 160 25% 10%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -33,24 +33,25 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --success: 142 71% 45%;
+    --success: 168 60% 42%;
     --success-foreground: 0 0% 100%;
 
-    --border: 120 10% 90%;
-    --input: 120 10% 90%;
-    --ring: 142 71% 45%;
+    --border: 165 20% 88%;
+    --input: 165 20% 88%;
+    --ring: 168 60% 42%;
 
     --radius: 0.75rem;
 
-    /* Custom gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(142 71% 45%) 0%, hsl(142 71% 55%) 100%);
-    --gradient-background: linear-gradient(90deg, hsl(142 40% 97%) 0%, hsl(120 20% 99%) 50%, hsl(0 0% 100%) 100%);
+    /* Enhanced gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(168 60% 42%) 0%, hsl(168 55% 52%) 100%);
+    --gradient-background: linear-gradient(100deg, hsl(168 35% 96%) 0%, hsl(165 20% 98%) 35%, hsl(0 0% 100%) 100%);
     
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(220 20% 10% / 0.03);
-    --shadow-md: 0 4px 6px -1px hsl(220 20% 10% / 0.05), 0 2px 4px -2px hsl(220 20% 10% / 0.03);
-    --shadow-lg: 0 10px 15px -3px hsl(220 20% 10% / 0.05), 0 4px 6px -4px hsl(220 20% 10% / 0.03);
-    --shadow-card: 0 1px 3px 0 hsl(220 20% 10% / 0.04), 0 1px 2px -1px hsl(220 20% 10% / 0.04);
+    /* Premium shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(168 30% 20% / 0.04);
+    --shadow-md: 0 4px 6px -1px hsl(168 30% 20% / 0.06), 0 2px 4px -2px hsl(168 30% 20% / 0.04);
+    --shadow-lg: 0 10px 15px -3px hsl(168 30% 20% / 0.06), 0 4px 6px -4px hsl(168 30% 20% / 0.04);
+    --shadow-card: 0 1px 3px 0 hsl(168 30% 20% / 0.05), 0 1px 2px -1px hsl(168 30% 20% / 0.05);
+    --shadow-glow: 0 0 30px hsl(168 60% 42% / 0.15);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -63,25 +64,25 @@
   }
 
   .dark {
-    --background: 220 20% 8%;
+    --background: 160 20% 6%;
     --foreground: 0 0% 98%;
 
-    --card: 220 20% 10%;
+    --card: 160 20% 8%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 220 20% 10%;
+    --popover: 160 20% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 142 71% 45%;
+    --primary: 168 60% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 15%;
+    --secondary: 160 15% 12%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 15% 15%;
-    --muted-foreground: 220 10% 60%;
+    --muted: 160 15% 12%;
+    --muted-foreground: 160 10% 55%;
 
-    --accent: 220 15% 18%;
+    --accent: 160 15% 15%;
     --accent-foreground: 0 0% 98%;
 
     --destructive: 0 62% 50%;
@@ -90,11 +91,11 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 142 71% 45%;
+    --border: 160 15% 15%;
+    --input: 160 15% 15%;
+    --ring: 168 60% 45%;
 
-    --gradient-background: linear-gradient(90deg, hsl(142 30% 10%) 0%, hsl(220 20% 8%) 50%, hsl(220 20% 8%) 100%);
+    --gradient-background: linear-gradient(100deg, hsl(168 25% 8%) 0%, hsl(160 20% 6%) 50%, hsl(160 20% 6%) 100%);
   }
 }
 
@@ -123,4 +124,59 @@
     @apply bg-clip-text text-transparent;
     background-image: var(--gradient-primary);
   }
+}
+
+/* F1 Car Animation */
+@keyframes f1-drive {
+  0% {
+    transform: translateX(-150px);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(calc(100vw + 150px));
+    opacity: 0;
+  }
+}
+
+.f1-car-animation {
+  animation: f1-drive 7s ease-in-out forwards;
+  pointer-events: none;
+}
+
+/* Ambient Pulse Animation */
+@keyframes ambient-pulse {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scaleX(0.3);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scaleX(1);
+  }
+}
+
+.ambient-line {
+  animation: ambient-pulse 10s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+@keyframes ambient-glow {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.2);
+  }
+}
+
+.ambient-glow {
+  animation: ambient-glow 8s ease-in-out infinite;
 }

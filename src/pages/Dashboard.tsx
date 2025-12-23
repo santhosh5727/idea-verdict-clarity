@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const mockIdeas = [
   {
@@ -65,15 +66,17 @@ const Dashboard = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <span className="text-sm font-bold text-primary-foreground">IV</span>
-            </div>
-            <span className="text-lg font-semibold text-foreground">Idea Verdict</span>
+          <Link to="/" className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Idea Verdict" 
+              className="h-10 md:h-12 w-auto"
+              style={{ filter: 'hue-rotate(-10deg)' }}
+            />
           </Link>
 
           <Link to="/evaluate">
-            <Button variant="default" size="sm" className="rounded-lg">
+            <Button variant="default" size="sm" className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
               + New Evaluation
             </Button>
           </Link>
@@ -81,7 +84,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="bg-gradient-to-r from-primary/5 via-background to-background min-h-[calc(100vh-64px)]">
+      <main className="bg-gradient-to-r from-primary/8 via-primary/3 to-background min-h-[calc(100vh-64px)]">
         <div className="container mx-auto px-4 py-8 md:py-12">
           {/* Header */}
           <div className="mb-8">
@@ -94,35 +97,41 @@ const Dashboard = () => {
           {/* Stats */}
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
             {/* Build */}
-            <div className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+            <div className="rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Build</p>
                   <p className="text-3xl font-bold text-foreground">{buildCount}</p>
                 </div>
-                <CheckCircle className="h-6 w-6 text-primary" />
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <CheckCircle className="h-6 w-6 text-primary" />
+                </div>
               </div>
             </div>
 
             {/* Narrow */}
-            <div className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+            <div className="rounded-xl border border-warning/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-warning/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Narrow</p>
                   <p className="text-3xl font-bold text-foreground">{narrowCount}</p>
                 </div>
-                <AlertCircle className="h-6 w-6 text-warning" />
+                <div className="p-2 rounded-lg bg-warning/10">
+                  <AlertCircle className="h-6 w-6 text-warning" />
+                </div>
               </div>
             </div>
 
             {/* Kill */}
-            <div className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+            <div className="rounded-xl border border-destructive/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-destructive/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Kill</p>
                   <p className="text-3xl font-bold text-foreground">{killCount}</p>
                 </div>
-                <XCircle className="h-6 w-6 text-destructive" />
+                <div className="p-2 rounded-lg bg-destructive/10">
+                  <XCircle className="h-6 w-6 text-destructive" />
+                </div>
               </div>
             </div>
           </div>
@@ -132,9 +141,9 @@ const Dashboard = () => {
             {mockIdeas.map((idea) => (
               <div
                 key={idea.id}
-                className="rounded-xl border border-border/50 bg-card p-5 shadow-sm"
+                className="group rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/30 transition-all duration-300"
               >
-                <h3 className="font-semibold text-foreground">{idea.title}</h3>
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{idea.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{idea.description}</p>
                 <div className="mt-3 flex items-center gap-2 text-sm">
                   {getVerdictIcon(idea.verdict)}

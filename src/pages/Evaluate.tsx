@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
 import StepIndicator from "@/components/StepIndicator";
+import logo from "@/assets/logo.png";
 
 const steps = ["Problem", "Solution", "Target Users", "Differentiation"];
 
@@ -62,11 +63,13 @@ const Evaluate = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <span className="text-sm font-bold text-primary-foreground">IV</span>
-            </div>
-            <span className="text-lg font-semibold text-foreground">Idea Verdict</span>
+          <Link to="/" className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Idea Verdict" 
+              className="h-10 md:h-12 w-auto"
+              style={{ filter: 'hue-rotate(-10deg)' }}
+            />
           </Link>
         </div>
       </header>
@@ -75,7 +78,7 @@ const Evaluate = () => {
       <StepIndicator steps={steps} currentStep={currentStep} />
 
       {/* Main Content */}
-      <main className="flex-1 bg-gradient-to-r from-primary/5 via-background to-background">
+      <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">
         <div className="container mx-auto px-4 py-12 md:py-16">
           <div className="mx-auto max-w-3xl">
             {/* Step Counter */}
@@ -93,7 +96,7 @@ const Evaluate = () => {
               placeholder={stepContent[currentStep].placeholder}
               value={answers[currentStep]}
               onChange={(e) => handleAnswerChange(e.target.value)}
-              className="min-h-[280px] resize-none rounded-xl border-border/50 bg-card text-base shadow-sm focus:border-primary/50"
+              className="min-h-[280px] resize-none rounded-xl border-border/50 bg-card/90 backdrop-blur-sm text-base shadow-card focus:border-primary/50 focus:ring-primary/20"
             />
 
             {/* Navigation */}
@@ -101,7 +104,7 @@ const Evaluate = () => {
               <Button
                 variant="outline"
                 onClick={handleBack}
-                className="gap-2 rounded-lg border-border bg-card px-6"
+                className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -109,7 +112,7 @@ const Evaluate = () => {
 
               <Button
                 onClick={handleContinue}
-                className="gap-2 rounded-lg bg-primary/80 hover:bg-primary px-6"
+                className="gap-2 rounded-lg px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02]"
               >
                 {isLastStep ? "Get Verdict" : "Continue"}
                 <ArrowRight className="h-4 w-4" />
