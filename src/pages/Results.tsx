@@ -159,18 +159,18 @@ const Results = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 flex-shrink-0">
             <img 
               src={logo} 
               alt="Idea Verdict" 
-              className="h-12 md:h-14 w-auto"
+              className="h-14 md:h-16 w-auto"
               style={{ filter: 'hue-rotate(-10deg)' }}
             />
           </Link>
 
           <Link
             to="/dashboard"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex-shrink-0"
           >
             Dashboard
           </Link>
@@ -179,16 +179,16 @@ const Results = () => {
 
       {/* Main Content */}
       <main className="bg-gradient-to-r from-primary/8 via-primary/3 to-background min-h-[calc(100vh-64px)]">
-        <div className="container mx-auto px-4 py-8 md:py-12">
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-12">
           <div className="mx-auto max-w-3xl">
             {/* Verdict Card */}
-            <div className={`mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-6 shadow-lg md:p-8`}>
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl ${verdictConfig.bgColor}`}>
-                  <VerdictIcon className={`h-10 w-10 ${verdictConfig.color}`} />
+            <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-xl ${verdictConfig.bgColor} flex-shrink-0`}>
+                  <VerdictIcon className={`h-8 w-8 sm:h-10 sm:w-10 ${verdictConfig.color}`} />
                 </div>
-                <div>
-                  <span className={`text-2xl font-bold ${verdictConfig.color} md:text-3xl`}>
+                <div className="min-w-0">
+                  <span className={`text-xl sm:text-2xl font-bold ${verdictConfig.color} md:text-3xl block break-words`}>
                     {verdictConfig.label}
                   </span>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -199,14 +199,14 @@ const Results = () => {
             </div>
 
             {/* Evaluation Sections */}
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {evaluationSections.map((section) => (
                 <div
                   key={section.title}
-                  className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card"
+                  className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-4 sm:p-5 shadow-card"
                 >
-                  <h3 className="font-semibold text-foreground mb-3">{section.title}</h3>
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                  <h3 className="font-semibold text-foreground mb-2 sm:mb-3">{section.title}</h3>
+                  <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed break-words">
                     {section.content}
                   </div>
                 </div>
