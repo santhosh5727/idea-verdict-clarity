@@ -93,13 +93,22 @@ const Evaluate = () => {
       // Submit evaluation to AI
       setIsEvaluating(true);
       try {
+        // Get the user's session token for authentication
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          toast.error("Please log in to evaluate your idea.");
+          setIsEvaluating(false);
+          navigate("/auth");
+          return;
+        }
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evaluate-idea`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              Authorization: `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
               problem: answers[0],
@@ -114,7 +123,10 @@ const Evaluate = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          if (response.status === 429) {
+          if (response.status === 401) {
+            toast.error("Please log in to evaluate your idea.");
+            navigate("/auth");
+          } else if (response.status === 429) {
             toast.error("Rate limit exceeded. Please try again in a moment.");
           } else if (response.status === 402) {
             toast.error("AI credits exhausted. Please add funds to continue.");
