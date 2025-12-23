@@ -1,25 +1,14 @@
-import { useState, useEffect } from "react";
-
 const F1CarAnimation = () => {
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setVisible(false), 7500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!visible) return null;
-
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-10" aria-hidden="true">
-      <div className="f1-car-animation absolute top-[40%] md:top-[35%]">
+      <div className="f1-car-loop absolute top-[40%] md:top-[35%]">
         <svg
           width="120"
           height="40"
           viewBox="0 0 120 40"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-20 h-auto md:w-28 lg:w-32 opacity-60"
+          className="w-20 h-auto md:w-28 lg:w-32 opacity-50"
         >
           {/* F1 Car Silhouette */}
           <path
