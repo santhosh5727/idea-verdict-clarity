@@ -23,14 +23,22 @@ const Auth = () => {
       <div className="flex flex-col justify-center px-6 py-12 lg:px-12 xl:px-20 bg-gradient-to-br from-primary/5 via-background to-background">
         <div className="mx-auto w-full max-w-md">
           {/* Logo */}
-          <Link to="/" className="mb-10 flex items-center gap-3">
-            <img 
-              src={logo} 
-              alt="Idea Verdict" 
-              className="h-10 w-auto"
-              style={{ filter: 'hue-rotate(-10deg)' }}
-            />
-          </Link>
+          <div className="mb-10 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <img 
+                src={logo} 
+                alt="Idea Verdict" 
+                className="h-12 w-auto"
+                style={{ filter: 'hue-rotate(-10deg)' }}
+              />
+            </Link>
+            <Link
+              to="/dashboard"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            >
+              Dashboard
+            </Link>
+          </div>
 
           {/* Heading */}
           <h1 className="mb-2 text-2xl font-bold text-foreground">Welcome back</h1>

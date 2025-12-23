@@ -70,7 +70,7 @@ const Dashboard = () => {
             <img 
               src={logo} 
               alt="Idea Verdict" 
-              className="h-10 md:h-12 w-auto"
+              className="h-12 md:h-14 w-auto"
               style={{ filter: 'hue-rotate(-10deg)' }}
             />
           </Link>
