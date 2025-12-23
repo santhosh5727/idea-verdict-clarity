@@ -1,9 +1,44 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+// Input validation schema
+const evaluateSchema = z.object({
+  problem: z.string().min(1).max(10000),
+  solution: z.string().min(1).max(10000),
+  targetUsers: z.string().min(1).max(5000),
+  differentiation: z.string().max(5000).optional().default(""),
+  workflow: z.string().max(5000).optional(),
+  projectType: z.enum(["startup", "hardware", "academic", "personal"]),
+});
+
+// CORS headers with origin validation
+const getAllowedOrigins = () => {
+  const origins = ["https://lovable.dev", "https://*.lovable.app"];
+  // Add localhost for development
+  if (Deno.env.get("DENO_ENV") !== "production") {
+    origins.push("http://localhost:5173", "http://localhost:3000");
+  }
+  return origins;
+};
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigins = getAllowedOrigins();
+  
+  // Check if origin matches any allowed pattern
+  const isAllowed = allowedOrigins.some(allowed => {
+    if (allowed.includes("*")) {
+      const pattern = allowed.replace("*", ".*");
+      return new RegExp(`^${pattern}$`).test(origin);
+    }
+    return allowed === origin;
+  });
+  
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : allowedOrigins[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 const SYSTEM_PROMPT = `You are Idea Verdict, a brutally honest decision engine for evaluating startup and app ideas.
@@ -132,6 +167,8 @@ Assume outputs may be copied to clipboard.
 Write verdicts that are self-contained and screenshot-safe.`;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -163,7 +200,18 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const { problem, solution, targetUsers, differentiation, workflow, projectType } = await req.json();
+    // Parse and validate input
+    const rawBody = await req.json();
+    const parseResult = evaluateSchema.safeParse(rawBody);
+    
+    if (!parseResult.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { problem, solution, targetUsers, differentiation, workflow, projectType } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -256,7 +304,7 @@ Provide your verdict following the exact output format.`;
   } catch (error) {
     console.error("Evaluation error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "An error occurred during evaluation" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
