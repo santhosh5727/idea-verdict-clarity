@@ -14,7 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      evaluations: {
+        Row: {
+          created_at: string
+          differentiation: string | null
+          full_verdict_text: string
+          id: string
+          idea_problem: string
+          project_type: string
+          solution: string | null
+          target_user: string
+          user_id: string
+          verdict_type: string
+        }
+        Insert: {
+          created_at?: string
+          differentiation?: string | null
+          full_verdict_text: string
+          id?: string
+          idea_problem: string
+          project_type: string
+          solution?: string | null
+          target_user: string
+          user_id: string
+          verdict_type: string
+        }
+        Update: {
+          created_at?: string
+          differentiation?: string | null
+          full_verdict_text?: string
+          id?: string
+          idea_problem?: string
+          project_type?: string
+          solution?: string | null
+          target_user?: string
+          user_id?: string
+          verdict_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

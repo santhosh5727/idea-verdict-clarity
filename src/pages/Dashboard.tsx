@@ -1,39 +1,47 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
 
-const mockIdeas = [
-  {
-    id: 1,
-    title: "AI-powered Code Review Assistant",
-    description: "Automated code review tool that learns from team preferences",
-    verdict: "build" as const,
-    confidence: 82,
-    date: "Dec 17, 2025",
-  },
-  {
-    id: 2,
-    title: "Sustainable Fashion Marketplace",
-    description: "Platform connecting eco-conscious consumers with sustainable brands",
-    verdict: "narrow" as const,
-    confidence: 65,
-    date: "Dec 14, 2025",
-  },
-  {
-    id: 3,
-    title: "Generic Social Media App",
-    description: "Another social platform without clear differentiation",
-    verdict: "kill" as const,
-    confidence: 91,
-    date: "Dec 11, 2025",
-  },
-];
+interface Evaluation {
+  id: string;
+  idea_problem: string;
+  verdict_type: string;
+  created_at: string;
+}
 
 const Dashboard = () => {
-  const buildCount = mockIdeas.filter((i) => i.verdict === "build").length;
-  const narrowCount = mockIdeas.filter((i) => i.verdict === "narrow").length;
-  const killCount = mockIdeas.filter((i) => i.verdict === "kill").length;
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEvaluations = async () => {
+      const { data, error } = await supabase
+        .from("evaluations")
+        .select("id, idea_problem, verdict_type, created_at")
+        .order("created_at", { ascending: false });
+      
+      if (error) {
+        console.error("Failed to fetch evaluations:", error);
+      } else {
+        setEvaluations(data || []);
+      }
+      setLoading(false);
+    };
+    fetchEvaluations();
+  }, []);
+
+  const mapVerdict = (verdictType: string): "build" | "narrow" | "kill" => {
+    if (verdictType === "PROCEED TO MVP") return "build";
+    if (verdictType === "BUILD ONLY IF NARROWED") return "narrow";
+    return "kill";
+  };
+
+  const buildCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "build").length;
+  const narrowCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "narrow").length;
+  const killCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "kill").length;
 
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
@@ -138,21 +146,43 @@ const Dashboard = () => {
 
           {/* Ideas List */}
           <div className="space-y-4">
-            {mockIdeas.map((idea) => (
-              <div
-                key={idea.id}
-                className="group rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/30 transition-all duration-300"
-              >
-                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{idea.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{idea.description}</p>
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                  {getVerdictIcon(idea.verdict)}
-                  {getVerdictLabel(idea.verdict)}
-                  <span className="text-muted-foreground ml-2">{idea.confidence}% confidence</span>
-                  <span className="text-muted-foreground ml-2">{idea.date}</span>
-                </div>
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ))}
+            ) : evaluations.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No evaluations yet.</p>
+                <Link to="/evaluate">
+                  <Button className="mt-4">Evaluate Your First Idea</Button>
+                </Link>
+              </div>
+            ) : (
+              evaluations.map((evaluation) => {
+                const verdict = mapVerdict(evaluation.verdict_type);
+                const date = new Date(evaluation.created_at).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+                return (
+                  <Link
+                    key={evaluation.id}
+                    to={`/results?id=${evaluation.id}`}
+                    className="block group rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/30 transition-all duration-300"
+                  >
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                      {evaluation.idea_problem}
+                    </h3>
+                    <div className="mt-3 flex items-center gap-2 text-sm">
+                      {getVerdictIcon(verdict)}
+                      {getVerdictLabel(verdict)}
+                      <span className="text-muted-foreground ml-2">{date}</span>
+                    </div>
+                  </Link>
+                );
+              })
+            )}
           </div>
         </div>
       </main>

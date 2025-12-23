@@ -1,6 +1,8 @@
-import { Link, useLocation, Navigate } from "react-router-dom";
-import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useSearchParams, Navigate } from "react-router-dom";
+import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
 
 interface EvaluationResult {
@@ -19,14 +21,59 @@ interface EvaluationInputs {
 
 const Results = () => {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const evaluationId = searchParams.get("id");
   const state = location.state as { evaluation: EvaluationResult; inputs: EvaluationInputs } | null;
+  
+  const [loading, setLoading] = useState(!!evaluationId);
+  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(state?.evaluation || null);
+  const [inputs, setInputs] = useState<EvaluationInputs | null>(state?.inputs || null);
 
-  // Redirect to evaluate if no result data
-  if (!state?.evaluation) {
-    return <Navigate to="/evaluate" replace />;
+  useEffect(() => {
+    if (evaluationId && !state?.evaluation) {
+      // Fetch from database
+      const fetchEvaluation = async () => {
+        const { data, error } = await supabase
+          .from("evaluations")
+          .select("*")
+          .eq("id", evaluationId)
+          .maybeSingle();
+        
+        if (error || !data) {
+          setLoading(false);
+          return;
+        }
+        
+        setEvaluation({
+          verdict: data.verdict_type,
+          fullEvaluation: data.full_verdict_text,
+          projectType: data.project_type,
+        });
+        setInputs({
+          problem: data.idea_problem,
+          solution: data.solution || "",
+          targetUsers: data.target_user,
+          differentiation: data.differentiation || "",
+          projectType: data.project_type,
+        });
+        setLoading(false);
+      };
+      fetchEvaluation();
+    }
+  }, [evaluationId, state]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-primary/8 via-primary/3 to-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
-  const { evaluation, inputs } = state;
+  // Redirect to evaluate if no result data
+  if (!evaluation) {
+    return <Navigate to="/evaluate" replace />;
+  }
 
   // Determine verdict styling
   const getVerdictConfig = (verdict: string) => {
@@ -57,7 +104,7 @@ const Results = () => {
     }
   };
 
-  const verdictConfig = getVerdictConfig(evaluation.verdict);
+  const verdictConfig = getVerdictConfig(evaluation!.verdict);
   const VerdictIcon = verdictConfig.icon;
 
   // Parse the full evaluation into sections
@@ -98,7 +145,7 @@ const Results = () => {
     return sections;
   };
 
-  const evaluationSections = parseEvaluation(evaluation.fullEvaluation);
+  const evaluationSections = parseEvaluation(evaluation!.fullEvaluation);
 
   const projectTypeLabels: Record<string, string> = {
     startup: "Startup / Business Idea",
@@ -145,7 +192,7 @@ const Results = () => {
                     {verdictConfig.label}
                   </span>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {projectTypeLabels[inputs.projectType] || inputs.projectType}
+                    {projectTypeLabels[inputs?.projectType || ""] || inputs?.projectType}
                   </p>
                 </div>
               </div>
@@ -172,7 +219,7 @@ const Results = () => {
                 View Full Evaluation
               </summary>
               <div className="px-5 pb-5 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed border-t border-border/30 pt-4">
-                {evaluation.fullEvaluation}
+                {evaluation!.fullEvaluation}
               </div>
             </details>
 
