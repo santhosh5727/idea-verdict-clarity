@@ -44,6 +44,20 @@ const VerdictChatAssistant = ({
     setLoading(true);
 
     try {
+      // Get the user's session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Please log in to use the chat assistant.",
+          },
+        ]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("verdict-assistant", {
         body: {
           message: userMessage,
