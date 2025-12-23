@@ -92,6 +92,11 @@ const Evaluate = () => {
 
   const isLastStep = currentStep === steps.length - 1;
 
+  // Check if current step is valid to continue
+  const canContinue = stepContent[currentStep].isProjectType 
+    ? selectedProjectType !== "" 
+    : answers[currentStep].trim() !== "";
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Navbar */}
@@ -140,7 +145,7 @@ const Evaluate = () => {
 
             {/* Project Type Selection or Textarea */}
             {stepContent[currentStep].isProjectType ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 mx-auto max-w-2xl">
                 {projectTypes.map((type) => {
                   const Icon = type.icon;
                   const isSelected = selectedProjectType === type.id;
@@ -219,7 +224,8 @@ const Evaluate = () => {
 
               <Button
                 onClick={handleContinue}
-                className="gap-2 rounded-lg px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02]"
+                disabled={!canContinue}
+                className="gap-2 rounded-lg px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {isLastStep ? "Get Verdict" : "Continue"}
                 <ArrowRight className="h-4 w-4" />
