@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams, Navigate } from "react-router-dom";
 import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 import logo from "@/assets/logo.png";
 
 interface EvaluationResult {
@@ -249,6 +250,14 @@ const Results = () => {
           </div>
         </div>
       </main>
+
+      {/* Chat Assistant */}
+      <VerdictChatAssistant
+        verdict={evaluation.verdict}
+        fullEvaluation={evaluation.fullEvaluation}
+        ideaProblem={inputs?.problem || ""}
+        projectType={inputs?.projectType || ""}
+      />
     </div>
   );
 };
