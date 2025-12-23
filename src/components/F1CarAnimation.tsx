@@ -1,8 +1,8 @@
 const F1CarAnimation = () => {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-10" aria-hidden="true">
-      {/* Positioned at bottom of hero, in free space below CTA buttons */}
-      <div className="f1-car-loop absolute bottom-[8%] md:bottom-[12%]">
+      {/* Positioned between logo and hero text */}
+      <div className="f1-car-loop absolute top-[80px] md:top-[90px]">
         <svg
           width="120"
           height="40"
