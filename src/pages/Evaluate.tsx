@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
 
-const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Project Type"];
+const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
 
 const stepContent = [
   {
@@ -28,6 +28,12 @@ const stepContent = [
   {
     heading: "What makes your solution unique?",
     placeholder: "Explain your competitive advantage and what sets you apart...",
+  },
+  {
+    heading: "How does your idea work? (Optional)",
+    placeholder: "Describe the step-by-step workflow or mechanism of how your idea operates in the real world...",
+    subtitle: "This optional field helps validate execution realism. Simple, realistic workflows are preferred.",
+    isOptional: true,
   },
   {
     heading: "Project Type",
@@ -68,7 +74,7 @@ const Evaluate = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<string[]>(["", "", "", "", ""]);
+  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", ""]);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("");
   const [isEvaluating, setIsEvaluating] = useState(false);
 
@@ -100,6 +106,7 @@ const Evaluate = () => {
               solution: answers[1],
               targetUsers: answers[2],
               differentiation: answers[3],
+              workflow: answers[4] || undefined,
               projectType: selectedProjectType,
             }),
           }
@@ -148,6 +155,7 @@ const Evaluate = () => {
               solution: answers[1],
               targetUsers: answers[2],
               differentiation: answers[3],
+              workflow: answers[4] || undefined,
               projectType: selectedProjectType,
             }
           } 
@@ -169,9 +177,16 @@ const Evaluate = () => {
   const isLastStep = currentStep === steps.length - 1;
 
   // Check if current step is valid to continue
+  const isOptionalStep = stepContent[currentStep].isOptional;
   const canContinue = stepContent[currentStep].isProjectType 
     ? selectedProjectType !== "" 
-    : answers[currentStep].trim() !== "";
+    : isOptionalStep || answers[currentStep].trim() !== "";
+
+  const handleStepClick = (stepIndex: number) => {
+    if (!isEvaluating) {
+      setCurrentStep(stepIndex);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -196,7 +211,7 @@ const Evaluate = () => {
       </header>
 
       {/* Step Indicator */}
-      <StepIndicator steps={steps} currentStep={currentStep} />
+      <StepIndicator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
 
       {/* Main Content */}
       <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams, Navigate } from "react-router-dom";
-import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 import logo from "@/assets/logo.png";
+import { toast } from "sonner";
 
 interface EvaluationResult {
   verdict: string;
@@ -29,6 +30,22 @@ const Results = () => {
   const [loading, setLoading] = useState(!!evaluationId);
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(state?.evaluation || null);
   const [inputs, setInputs] = useState<EvaluationInputs | null>(state?.inputs || null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyResult = async () => {
+    if (!evaluation) return;
+    
+    const copyText = evaluation.fullEvaluation;
+    
+    try {
+      await navigator.clipboard.writeText(copyText);
+      setCopied(true);
+      toast.success("Result copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error("Failed to copy to clipboard");
+    }
+  };
 
   useEffect(() => {
     if (evaluationId && !state?.evaluation) {
@@ -226,6 +243,24 @@ const Results = () => {
 
             {/* Actions */}
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                onClick={handleCopyResult}
+                className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all w-full sm:w-auto"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy Result
+                  </>
+                )}
+              </Button>
+
               <Button
                 variant="outline"
                 asChild
