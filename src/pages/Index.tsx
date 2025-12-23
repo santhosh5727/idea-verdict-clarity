@@ -15,7 +15,7 @@ const Index = () => {
             <img 
               src={logo} 
               alt="Idea Verdict" 
-              className="h-10 md:h-12 w-auto brightness-100 saturate-100"
+              className="h-12 md:h-14 w-auto brightness-100 saturate-100"
               style={{ filter: 'hue-rotate(-10deg)' }}
             />
           </Link>
