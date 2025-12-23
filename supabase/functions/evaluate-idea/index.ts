@@ -14,7 +14,11 @@ const evaluateSchema = z.object({
 
 // CORS headers with origin validation
 const getAllowedOrigins = () => {
-  const origins = ["https://lovable.dev", "https://*.lovable.app"];
+  const origins = [
+    "https://lovable.dev",
+    "https://*.lovable.app",
+    "https://*.lovableproject.com"
+  ];
   // Add localhost for development
   if (Deno.env.get("DENO_ENV") !== "production") {
     origins.push("http://localhost:5173", "http://localhost:3000");
@@ -202,9 +206,11 @@ serve(async (req) => {
 
     // Parse and validate input
     const rawBody = await req.json();
+    console.log("EVALUATION PAYLOAD", rawBody);
     const parseResult = evaluateSchema.safeParse(rawBody);
     
     if (!parseResult.success) {
+      console.error("Validation failed:", parseResult.error.flatten());
       return new Response(
         JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten() }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
