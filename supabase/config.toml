@@ -1,7 +1,7 @@
 project_id = "whpxpmaikthpremuvnwx"
 
 [functions.evaluate-idea]
-verify_jwt = true
+verify_jwt = false
 
 [functions.verdict-assistant]
-verify_jwt = true
+verify_jwt = false
