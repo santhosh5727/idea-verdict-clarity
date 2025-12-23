@@ -9,19 +9,19 @@ const Navbar = () => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-        <Link to="/" className="flex items-center gap-3">
+        <Link to="/" className="flex items-center gap-3 flex-shrink-0">
           <img 
             src={logo} 
             alt="Idea Verdict" 
-            className="h-10 md:h-12 w-auto"
+            className="h-12 md:h-14 w-auto"
             style={{ filter: 'hue-rotate(-10deg)' }}
           />
         </Link>
 
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
           <Link
             to="/dashboard"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground whitespace-nowrap"
           >
             Dashboard
           </Link>

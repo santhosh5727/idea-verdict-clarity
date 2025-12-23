@@ -33,19 +33,19 @@ const Index = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 flex-shrink-0">
             <img 
               src={logo} 
               alt="Idea Verdict" 
-              className="h-12 md:h-14 w-auto brightness-100 saturate-100"
+              className="h-14 md:h-16 w-auto brightness-100 saturate-100"
               style={{ filter: 'hue-rotate(-10deg)' }}
             />
           </Link>
 
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             <Link
               to="/dashboard"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground whitespace-nowrap"
             >
               Dashboard
             </Link>
@@ -82,26 +82,26 @@ const Index = () => {
       <section className="relative flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background overflow-hidden">
         <F1CarAnimation />
         
-        <div className="container mx-auto px-4 py-20 md:py-32">
+        <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-20 md:py-32">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+            <h1 className="mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
               Know if your startup idea
               <br />
               <span className="gradient-text">deserves to exist.</span>
             </h1>
-            <p className="mb-10 text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto">
+            <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto px-2">
               An opinionated decision engine that evaluates your idea with clarity
               and honesty. No fluff, just a clear verdict: Build, Narrow, or Kill.
             </p>
-            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link to="/evaluate">
-                <Button className="rounded-lg px-8 py-6 text-base font-medium shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]">
+            <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 sm:flex-row px-4 sm:px-0">
+              <Link to="/evaluate" className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto rounded-lg px-8 py-6 text-base font-medium shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]">
                   Evaluate My Idea
                 </Button>
               </Link>
               <Button
                 variant="outline"
-                className="rounded-lg px-8 py-6 text-base font-medium border-primary/20 bg-card/80 backdrop-blur-sm hover:bg-primary/5 hover:border-primary/40 transition-all"
+                className="w-full sm:w-auto rounded-lg px-8 py-6 text-base font-medium border-primary/20 bg-card/80 backdrop-blur-sm hover:bg-primary/5 hover:border-primary/40 transition-all"
                 asChild
               >
                 <a href="#how-it-works">See How It Works</a>
@@ -111,7 +111,7 @@ const Index = () => {
         </div>
 
         {/* Verdict Cards Section with Ambient Animation */}
-        <section id="how-it-works" className="relative container mx-auto px-4 pb-20">
+        <section id="how-it-works" className="relative container mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
           <AmbientAnimation />
           
           <div className="relative z-10 grid gap-6 md:grid-cols-3 max-w-4xl mx-auto">

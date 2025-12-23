@@ -178,17 +178,17 @@ const Evaluate = () => {
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 flex-shrink-0">
             <img 
               src={logo} 
               alt="Idea Verdict" 
-              className="h-12 md:h-14 w-auto"
+              className="h-14 md:h-16 w-auto"
               style={{ filter: 'hue-rotate(-10deg)' }}
             />
           </Link>
           <Link
             to="/dashboard"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex-shrink-0"
           >
             Dashboard
           </Link>
@@ -200,7 +200,7 @@ const Evaluate = () => {
 
       {/* Main Content */}
       <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">
-        <div className="container mx-auto px-4 py-12 md:py-16">
+        <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16">
           <div className="mx-auto max-w-3xl">
             {/* Step Counter */}
             <p className="mb-2 text-sm text-muted-foreground">
@@ -289,26 +289,26 @@ const Evaluate = () => {
             )}
 
             {/* Navigation */}
-            <div className="mt-8 flex items-center justify-between">
+            <div className="mt-6 sm:mt-8 flex items-center justify-between gap-3">
               <Button
                 variant="outline"
                 onClick={handleBack}
                 disabled={isEvaluating}
-                className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all"
+                className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-4 sm:px-6 hover:bg-primary/5 hover:border-primary/30 transition-all flex-1 sm:flex-none"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back
+                <span className="hidden sm:inline">Back</span>
               </Button>
 
               <Button
                 onClick={handleContinue}
                 disabled={!canContinue || isEvaluating}
-                className="gap-2 rounded-lg px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="gap-2 rounded-lg px-4 sm:px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-1 sm:flex-none"
               >
                 {isEvaluating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Evaluating...
+                    <span className="hidden sm:inline">Evaluating...</span>
                   </>
                 ) : (
                   <>
