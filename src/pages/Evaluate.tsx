@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Rocket, Cpu, GraduationCap, FlaskConical } from "lucide-react";
+import { ArrowLeft, ArrowRight, Rocket, Cpu, GraduationCap, FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
 import StepIndicator from "@/components/StepIndicator";
+import { toast } from "sonner";
 import logo from "@/assets/logo.png";
 
 const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Project Type"];
@@ -66,6 +67,7 @@ const Evaluate = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>(["", "", "", "", ""]);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("");
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const handleBack = () => {
     if (currentStep === 0) {
@@ -75,12 +77,64 @@ const Evaluate = () => {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep((prev) => prev + 1);
     } else {
-      // Submit evaluation and go to results
-      navigate("/results");
+      // Submit evaluation to AI
+      setIsEvaluating(true);
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evaluate-idea`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({
+              problem: answers[0],
+              solution: answers[1],
+              targetUsers: answers[2],
+              differentiation: answers[3],
+              projectType: selectedProjectType,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (response.status === 429) {
+            toast.error("Rate limit exceeded. Please try again in a moment.");
+          } else if (response.status === 402) {
+            toast.error("AI credits exhausted. Please add funds to continue.");
+          } else {
+            toast.error(errorData.error || "Evaluation failed. Please try again.");
+          }
+          setIsEvaluating(false);
+          return;
+        }
+
+        const result = await response.json();
+        
+        // Navigate to results with the evaluation data
+        navigate("/results", { 
+          state: { 
+            evaluation: result,
+            inputs: {
+              problem: answers[0],
+              solution: answers[1],
+              targetUsers: answers[2],
+              differentiation: answers[3],
+              projectType: selectedProjectType,
+            }
+          } 
+        });
+      } catch (error) {
+        console.error("Evaluation error:", error);
+        toast.error("Failed to evaluate idea. Please try again.");
+        setIsEvaluating(false);
+      }
     }
   };
 
@@ -154,11 +208,12 @@ const Evaluate = () => {
                       key={type.id}
                       type="button"
                       onClick={() => setSelectedProjectType(type.id)}
+                      disabled={isEvaluating}
                       className={`group text-left rounded-xl border p-5 transition-all duration-300 ${
                         isSelected
                           ? "border-primary bg-primary/10 shadow-lg"
                           : "border-border/50 bg-card/90 backdrop-blur-sm shadow-card hover:shadow-lg hover:border-primary/30"
-                      }`}
+                      } ${isEvaluating ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       <div className="flex items-start gap-4">
                         <div
@@ -216,6 +271,7 @@ const Evaluate = () => {
               <Button
                 variant="outline"
                 onClick={handleBack}
+                disabled={isEvaluating}
                 className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -224,11 +280,20 @@ const Evaluate = () => {
 
               <Button
                 onClick={handleContinue}
-                disabled={!canContinue}
+                disabled={!canContinue || isEvaluating}
                 className="gap-2 rounded-lg px-6 shadow-md hover:shadow-lg transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {isLastStep ? "Get Verdict" : "Continue"}
-                <ArrowRight className="h-4 w-4" />
+                {isEvaluating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Evaluating...
+                  </>
+                ) : (
+                  <>
+                    {isLastStep ? "Get Verdict" : "Continue"}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             </div>
           </div>
