@@ -7,46 +7,31 @@ interface StepIndicatorProps {
 
 const StepIndicator = ({ steps, currentStep }: StepIndicatorProps) => {
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between">
+    <div className="border-b border-border/50 bg-background/50">
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}>
         {steps.map((step, index) => (
-          <div key={step} className="flex items-center">
-            <div className="flex flex-col items-center">
-              <div
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
-                  index < currentStep
-                    ? "bg-primary text-primary-foreground"
-                    : index === currentStep
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {index + 1}
-              </div>
-              <span
-                className={cn(
-                  "mt-2 text-xs font-medium",
-                  index <= currentStep ? "text-foreground" : "text-muted-foreground"
-                )}
-              >
-                {step}
-              </span>
-            </div>
-            {index < steps.length - 1 && (
-              <div
-                className={cn(
-                  "mx-2 h-0.5 w-12 sm:w-20 md:w-32",
-                  index < currentStep ? "bg-primary" : "bg-muted"
-                )}
-              />
-            )}
+          <div key={step} className="flex flex-col">
+            <span
+              className={cn(
+                "px-4 py-4 text-sm font-medium",
+                index <= currentStep ? "text-foreground" : "text-muted-foreground"
+              )}
+            >
+              {step}
+            </span>
+            <div
+              className={cn(
+                "h-1 w-full",
+                index < currentStep
+                  ? "bg-primary"
+                  : index === currentStep
+                  ? "bg-primary"
+                  : "bg-border/50"
+              )}
+            />
           </div>
         ))}
       </div>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        Step {currentStep + 1} of {steps.length}
-      </p>
     </div>
   );
 };
