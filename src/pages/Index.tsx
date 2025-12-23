@@ -1,11 +1,33 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, User, LogOut } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import F1CarAnimation from "@/components/F1CarAnimation";
 import AmbientAnimation from "@/components/AmbientAnimation";
+import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
 
 const Index = () => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setOpen(false);
+    navigate("/");
+  };
+
+  const getInitial = (email: string | undefined) => {
+    if (!email) return "U";
+    return email.charAt(0).toUpperCase();
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Navbar */}
@@ -27,11 +49,31 @@ const Index = () => {
             >
               Dashboard
             </Link>
-            <Link to="/auth">
-              <Button variant="default" size="sm" className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
-                Sign In
-              </Button>
-            </Link>
+            
+            {user ? (
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <button className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
+                    {getInitial(user.email)}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-2" align="end">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
+                  </button>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Link to="/auth">
+                <Button variant="default" size="sm" className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
       </header>
