@@ -103,6 +103,16 @@ const Evaluate = () => {
           return;
         }
 
+        // Normalize payload - ensure all values are properly formatted
+        const payload = {
+          problem: answers[0].trim(),
+          solution: answers[1].trim() || undefined,
+          targetUsers: answers[2].trim(),
+          differentiation: answers[3].trim() || undefined,
+          workflow: answers[4].trim() || undefined,
+          projectType: selectedProjectType || "startup",
+        };
+
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evaluate-idea`,
           {
@@ -111,14 +121,7 @@ const Evaluate = () => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${session.access_token}`,
             },
-            body: JSON.stringify({
-              problem: answers[0],
-              solution: answers[1],
-              targetUsers: answers[2],
-              differentiation: answers[3],
-              workflow: answers[4] || undefined,
-              projectType: selectedProjectType,
-            }),
+            body: JSON.stringify(payload),
           }
         );
 
@@ -144,11 +147,11 @@ const Evaluate = () => {
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
             user_id: user.id,
-            idea_problem: answers[0],
-            solution: answers[1],
-            target_user: answers[2],
-            differentiation: answers[3],
-            project_type: selectedProjectType,
+            idea_problem: payload.problem,
+            solution: payload.solution || null,
+            target_user: payload.targetUsers,
+            differentiation: payload.differentiation || null,
+            project_type: payload.projectType,
             verdict_type: result.verdict,
             full_verdict_text: result.fullEvaluation,
           });
@@ -164,12 +167,12 @@ const Evaluate = () => {
           state: { 
             evaluation: result,
             inputs: {
-              problem: answers[0],
-              solution: answers[1],
-              targetUsers: answers[2],
-              differentiation: answers[3],
-              workflow: answers[4] || undefined,
-              projectType: selectedProjectType,
+              problem: payload.problem,
+              solution: payload.solution,
+              targetUsers: payload.targetUsers,
+              differentiation: payload.differentiation,
+              workflow: payload.workflow,
+              projectType: payload.projectType,
             }
           } 
         });
