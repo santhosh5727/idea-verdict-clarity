@@ -37,53 +37,56 @@ const VerdictChatAssistant = ({
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-
     const userMessage = input.trim();
+    
+    // Validate message length
+    if (userMessage.length < 3 || loading) return;
+
+    // Validate verdict context exists
+    if (!fullEvaluation) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: userMessage },
+        { role: "assistant", content: "I don't have the verdict context. Please refresh the page." },
+      ]);
+      setInput("");
+      return;
+    }
+
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setLoading(true);
 
     try {
-      // Get the user's session token for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "Please log in to use the chat assistant.",
-          },
-        ]);
-        setLoading(false);
-        return;
-      }
-
       const { data, error } = await supabase.functions.invoke("verdict-assistant", {
         body: {
           message: userMessage,
-          verdict,
-          fullEvaluation,
-          ideaProblem,
-          projectType,
+          verdict_text: fullEvaluation,
+          verdict_type: verdict,
           conversationHistory: messages,
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response },
-      ]);
+      if (data.error) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.error },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.response },
+        ]);
+      }
     } catch (error) {
       logError("Chat error:", error);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: "I apologize, but I encountered an error. Please try again.",
-        },
+        { role: "assistant", content: "Chat unavailable. Please try again." },
       ]);
     } finally {
       setLoading(false);

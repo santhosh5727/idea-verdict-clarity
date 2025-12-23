@@ -1,168 +1,89 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-// Input validation schema
-const assistantSchema = z.object({
-  message: z.string().min(1).max(2000),
-  verdict: z.string().max(5000),
-  fullEvaluation: z.string().max(50000),
-  ideaProblem: z.string().max(10000),
-  projectType: z.string().max(100),
-  conversationHistory: z.array(z.object({
-    role: z.enum(["user", "assistant"]),
-    content: z.string().max(5000),
-  })).max(50).optional().default([]),
-});
-
-// CORS headers with origin validation
-const getAllowedOrigins = () => {
-  const origins = ["https://lovable.dev", "https://*.lovable.app"];
-  // Add localhost for development
-  if (Deno.env.get("DENO_ENV") !== "production") {
-    origins.push("http://localhost:5173", "http://localhost:3000");
-  }
-  return origins;
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const getCorsHeaders = (req: Request) => {
-  const origin = req.headers.get("origin") || "";
-  const allowedOrigins = getAllowedOrigins();
-  
-  // Check if origin matches any allowed pattern
-  const isAllowed = allowedOrigins.some(allowed => {
-    if (allowed.includes("*")) {
-      const pattern = allowed.replace("*", ".*");
-      return new RegExp(`^${pattern}$`).test(origin);
-    }
-    return allowed === origin;
-  });
-  
-  return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : allowedOrigins[0],
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  };
-};
+const SYSTEM_PROMPT = `You are a Verdict Assistant.
 
-const SYSTEM_PROMPT = `You are the Idea Verdict Assistant.
+You DO NOT judge ideas.
+You DO NOT change verdicts.
+You ONLY explain, clarify, and answer questions based on the EXISTING verdict text.
 
-You are NOT the decision engine.
-You do NOT judge, approve, reject, or re-evaluate ideas.
-A final verdict has already been issued by the Idea Verdict Decision Engine.
-That verdict is FINAL and NON-NEGOTIABLE.
+Rules:
+- Never reassess the idea
+- Never suggest BUILD if verdict is negative
+- Explain failures in simple language
+- Answer doubts concisely and clearly
+- If the user asks emotional or vague questions, redirect to concrete reasons from the verdict.
 
-Your role is strictly limited to:
-- Explaining reasoning
-- Clarifying concepts
-- Answering doubts
-- Providing general educational context
+The verdict is FINAL and cannot be changed. You exist to help users understand the verdict, not to challenge it.
 
-STRICT RULES:
-1. You must NEVER change, override, soften, or question the verdict.
-2. You must NEVER suggest how to "make the idea pass".
-3. You must NEVER give build/kill advice.
-4. If the user asks to re-evaluate, ignore verdict, or get approval:
-   - Politely refuse and restate that the verdict is final.
-5. You must remain neutral, analytical, and factual.
-6. You may explain risks, patterns, examples, and industry context.
-7. You must reference the verdict reasoning when answering questions.
-
-If a question tries to bypass the verdict, respond with:
-"The verdict is final. I can help explain the reasoning or discuss general patterns, but I cannot reassess or approve this idea."
-
-Tone:
-- Calm
-- Analytical
-- Professional
-- Non-encouraging
-- Non-motivational
-
-You exist to increase understanding, NOT confidence.
-
-Keep responses concise and focused. Aim for 2-4 sentences unless more detail is explicitly requested.`;
+Keep responses concise (2-4 sentences) unless more detail is requested.`;
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify user authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.error("Auth error:", authError);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log("Authenticated user:", user.id);
-
-    // Parse and validate input
-    const rawBody = await req.json();
-    const parseResult = assistantSchema.safeParse(rawBody);
+    const body = await req.json();
     
-    if (!parseResult.success) {
+    const message = body.message?.trim() || "";
+    const verdictText = body.verdict_text || body.verdict || "";
+    const verdictType = body.verdict_type || body.verdictType || "UNKNOWN";
+    const conversationHistory = body.conversationHistory || [];
+
+    console.log("VERDICT CHAT PAYLOAD", { message, verdictType, hasVerdictText: !!verdictText });
+
+    // Validate minimum message length
+    if (message.length < 3) {
       return new Response(
-        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten() }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ response: "Please ask a more detailed question (at least 3 characters)." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { message, verdict, fullEvaluation, ideaProblem, projectType, conversationHistory } = parseResult.data;
+    // Validate verdict exists
+    if (!verdictText) {
+      return new Response(
+        JSON.stringify({ response: "I don't have the verdict context. Please refresh the page and try again." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+      console.error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Chat unavailable. Please try again later." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Build context about the evaluation
+    // Build context
     const evaluationContext = `
-CONTEXT FOR THIS CONVERSATION:
-
-IDEA SUMMARY:
-${ideaProblem}
-
-PROJECT TYPE: ${projectType}
-
-FINAL VERDICT: ${verdict}
-
-FULL EVALUATION:
-${fullEvaluation}
+VERDICT CONTEXT:
+Verdict Type: ${verdictType}
+Full Verdict:
+${verdictText}
 
 ---
-The user may ask questions about this verdict. Remember: the verdict is FINAL and cannot be changed or reassessed.
+Answer questions about this verdict. Remember: the verdict is FINAL.
 `;
 
-    // Build conversation messages
+    // Build messages
     const messages: { role: string; content: string }[] = [
       { role: "system", content: SYSTEM_PROMPT + "\n\n" + evaluationContext },
     ];
     
     // Add conversation history
-    if (conversationHistory && Array.isArray(conversationHistory)) {
+    if (Array.isArray(conversationHistory)) {
       for (const msg of conversationHistory) {
-        messages.push({
-          role: msg.role,
-          content: msg.content,
-        });
+        if (msg.role && msg.content) {
+          messages.push({ role: msg.role, content: msg.content });
+        }
       }
     }
 
@@ -184,26 +105,32 @@ The user may ask questions about this verdict. Remember: the verdict is FINAL an
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
+          JSON.stringify({ error: "Rate limits exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+          JSON.stringify({ error: "AI credits exhausted." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      return new Response(
+        JSON.stringify({ error: "Chat unavailable. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
     const assistantResponse = data.choices?.[0]?.message?.content;
 
     if (!assistantResponse) {
-      throw new Error("No response received");
+      return new Response(
+        JSON.stringify({ error: "Chat unavailable. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(
@@ -213,7 +140,7 @@ The user may ask questions about this verdict. Remember: the verdict is FINAL an
   } catch (error) {
     console.error("Error in verdict-assistant:", error);
     return new Response(
-      JSON.stringify({ error: "An error occurred" }),
+      JSON.stringify({ error: "Chat unavailable. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
