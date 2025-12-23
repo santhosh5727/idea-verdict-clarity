@@ -4,6 +4,7 @@ import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2, Cop
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
+import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
 
@@ -214,6 +215,12 @@ const Results = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Idea Strength Meter */}
+              <IdeaStrengthMeter 
+                fullEvaluation={evaluation.fullEvaluation} 
+                verdict={evaluation.verdict} 
+              />
             </div>
 
             {/* Evaluation Sections */}
