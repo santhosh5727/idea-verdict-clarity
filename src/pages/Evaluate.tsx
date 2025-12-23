@@ -8,6 +8,7 @@ import StepIndicator from "@/components/StepIndicator";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
 const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
@@ -153,7 +154,7 @@ const Evaluate = () => {
           });
           
           if (saveError) {
-            console.error("Failed to save evaluation:", saveError);
+            logError("Failed to save evaluation:", saveError);
             // Continue anyway - don't block user from seeing results
           }
         }
@@ -173,7 +174,7 @@ const Evaluate = () => {
           } 
         });
       } catch (error) {
-        console.error("Evaluation error:", error);
+        logError("Evaluation error:", error);
         toast.error("Failed to evaluate idea. Please try again.");
         setIsEvaluating(false);
       }

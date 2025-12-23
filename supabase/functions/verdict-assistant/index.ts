@@ -1,10 +1,47 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+// Input validation schema
+const assistantSchema = z.object({
+  message: z.string().min(1).max(2000),
+  verdict: z.string().max(5000),
+  fullEvaluation: z.string().max(50000),
+  ideaProblem: z.string().max(10000),
+  projectType: z.string().max(100),
+  conversationHistory: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().max(5000),
+  })).max(50).optional().default([]),
+});
+
+// CORS headers with origin validation
+const getAllowedOrigins = () => {
+  const origins = ["https://lovable.dev", "https://*.lovable.app"];
+  // Add localhost for development
+  if (Deno.env.get("DENO_ENV") !== "production") {
+    origins.push("http://localhost:5173", "http://localhost:3000");
+  }
+  return origins;
+};
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigins = getAllowedOrigins();
+  
+  // Check if origin matches any allowed pattern
+  const isAllowed = allowedOrigins.some(allowed => {
+    if (allowed.includes("*")) {
+      const pattern = allowed.replace("*", ".*");
+      return new RegExp(`^${pattern}$`).test(origin);
+    }
+    return allowed === origin;
+  });
+  
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : allowedOrigins[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 const SYSTEM_PROMPT = `You are the Idea Verdict Assistant.
@@ -45,6 +82,8 @@ You exist to increase understanding, NOT confidence.
 Keep responses concise and focused. Aim for 2-4 sentences unless more detail is explicitly requested.`;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -76,14 +115,18 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const { message, verdict, fullEvaluation, ideaProblem, projectType, conversationHistory } = await req.json();
-
-    if (!message) {
+    // Parse and validate input
+    const rawBody = await req.json();
+    const parseResult = assistantSchema.safeParse(rawBody);
+    
+    if (!parseResult.success) {
       return new Response(
-        JSON.stringify({ error: "Message is required" }),
+        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten() }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const { message, verdict, fullEvaluation, ideaProblem, projectType, conversationHistory } = parseResult.data;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -170,7 +213,7 @@ The user may ask questions about this verdict. Remember: the verdict is FINAL an
   } catch (error) {
     console.error("Error in verdict-assistant:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "An error occurred" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

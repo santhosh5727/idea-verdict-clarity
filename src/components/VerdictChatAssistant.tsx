@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, MessageCircle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
 
 interface VerdictChatAssistantProps {
   verdict: string;
@@ -76,7 +77,7 @@ const VerdictChatAssistant = ({
         { role: "assistant", content: data.response },
       ]);
     } catch (error) {
-      console.error("Chat error:", error);
+      logError("Chat error:", error);
       setMessages((prev) => [
         ...prev,
         {

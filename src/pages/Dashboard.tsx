@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
 interface Evaluation {
@@ -24,7 +25,7 @@ const Dashboard = () => {
         .order("created_at", { ascending: false });
       
       if (error) {
-        console.error("Failed to fetch evaluations:", error);
+        logError("Failed to fetch evaluations:", error);
       } else {
         setEvaluations(data || []);
       }
