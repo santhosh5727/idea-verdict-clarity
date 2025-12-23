@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
 import StepIndicator from "@/components/StepIndicator";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
 
 const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Project Type"];
@@ -64,6 +66,7 @@ const projectTypes = [
 
 const Evaluate = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>(["", "", "", "", ""]);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("");
@@ -116,6 +119,25 @@ const Evaluate = () => {
         }
 
         const result = await response.json();
+        
+        // Save evaluation to database
+        if (user) {
+          const { error: saveError } = await supabase.from("evaluations").insert({
+            user_id: user.id,
+            idea_problem: answers[0],
+            solution: answers[1],
+            target_user: answers[2],
+            differentiation: answers[3],
+            project_type: selectedProjectType,
+            verdict_type: result.verdict,
+            full_verdict_text: result.fullEvaluation,
+          });
+          
+          if (saveError) {
+            console.error("Failed to save evaluation:", saveError);
+            // Continue anyway - don't block user from seeing results
+          }
+        }
         
         // Navigate to results with the evaluation data
         navigate("/results", { 
