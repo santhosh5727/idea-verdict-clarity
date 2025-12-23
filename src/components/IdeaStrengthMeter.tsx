@@ -8,63 +8,28 @@ interface IdeaStrengthMeterProps {
 const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
-  // Calculate idea strength percentage based on evaluation dimensions
-  const calculateStrength = (): number => {
-    let score = 50; // Base score
-
-    const text = fullEvaluation.toLowerCase();
-
-    // Problem specificity scoring
-    if (text.includes("well-defined") || text.includes("specific problem") || text.includes("clear problem")) {
-      score += 10;
-    } else if (text.includes("vague") || text.includes("unclear problem") || text.includes("not specific")) {
-      score -= 10;
+  // Parse the AI-generated Idea Strength Score from the evaluation
+  const parseStrengthScore = (): number => {
+    // Look for "IDEA STRENGTH SCORE: X%" pattern
+    const scoreMatch = fullEvaluation.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
+    if (scoreMatch) {
+      const score = parseInt(scoreMatch[1], 10);
+      if (!isNaN(score) && score >= 0 && score <= 100) {
+        return score;
+      }
     }
 
-    // App-solvability / Feasibility scoring
-    if (text.includes("can be solved") || text.includes("feasible") || text.includes("app-solvable")) {
-      score += 10;
-    } else if (text.includes("cannot be solved") || text.includes("not app-solvable") || text.includes("not feasible")) {
-      score -= 15;
-    }
-
-    // Execution realism scoring
-    if (text.includes("realistic") || text.includes("achievable") || text.includes("execution is possible")) {
-      score += 10;
-    } else if (text.includes("unrealistic") || text.includes("not achievable") || text.includes("execution") && text.includes("fail")) {
-      score -= 10;
-    }
-
-    // User clarity scoring
-    if (text.includes("clear target") || text.includes("well-defined user") || text.includes("specific audience")) {
-      score += 10;
-    } else if (text.includes("unclear user") || text.includes("vague audience") || text.includes("who is this for")) {
-      score -= 10;
-    }
-
-    // Differentiation scoring
-    if (text.includes("unique") || text.includes("differentiated") || text.includes("novel approach")) {
-      score += 10;
-    } else if (text.includes("already exists") || text.includes("no differentiation") || text.includes("too similar")) {
-      score -= 10;
-    }
-
-    // Verdict-based adjustment
+    // Fallback based on verdict if no score found
     if (verdict === "PROCEED TO MVP") {
-      score = Math.max(score, 75);
-      score = Math.min(score + 15, 100);
+      return 65;
     } else if (verdict === "BUILD ONLY IF NARROWED") {
-      score = Math.max(Math.min(score, 70), 45);
+      return 40;
     } else {
-      // DO NOT BUILD
-      score = Math.min(score, 40);
-      score = Math.max(score - 10, 5);
+      return 20;
     }
-
-    return Math.max(0, Math.min(100, score));
   };
 
-  const targetPercentage = calculateStrength();
+  const targetPercentage = parseStrengthScore();
 
   // Animate the percentage from 0 to target
   useEffect(() => {
