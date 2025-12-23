@@ -176,11 +176,38 @@ const Evaluate = () => {
 
   const isLastStep = currentStep === steps.length - 1;
 
-  // Check if current step is valid to continue
+  // Minimum character requirements per step
+  const getMinChars = (stepIndex: number): number => {
+    switch (stepIndex) {
+      case 0: return 80;  // Problem Description
+      case 2: return 20;  // Target Users
+      case 1: return 20;  // Solution (Intended Outcome)
+      default: return 0;
+    }
+  };
+
+  // Get trimmed length (whitespace-only doesn't count)
+  const getTrimmedLength = (text: string): number => text.trim().length;
+
+  // Check if current step meets minimum requirements
   const isOptionalStep = stepContent[currentStep].isOptional;
+  const minChars = getMinChars(currentStep);
+  const currentTrimmedLength = getTrimmedLength(answers[currentStep]);
+  const meetsMinimum = currentTrimmedLength >= minChars;
+
   const canContinue = stepContent[currentStep].isProjectType 
     ? selectedProjectType !== "" 
-    : isOptionalStep || answers[currentStep].trim() !== "";
+    : isOptionalStep || meetsMinimum;
+
+  // Validation message for current step
+  const getValidationMessage = (): string | null => {
+    if (stepContent[currentStep].isProjectType || isOptionalStep) return null;
+    if (meetsMinimum) return null;
+    const remaining = minChars - currentTrimmedLength;
+    return `Please add more detail (${remaining} more character${remaining !== 1 ? 's' : ''} needed).`;
+  };
+
+  const validationMessage = getValidationMessage();
 
   const handleStepClick = (stepIndex: number) => {
     if (!isEvaluating) {
@@ -333,6 +360,13 @@ const Evaluate = () => {
                 )}
               </Button>
             </div>
+
+            {/* Validation Message */}
+            {validationMessage && (
+              <p className="mt-4 text-sm text-muted-foreground text-center">
+                {validationMessage}
+              </p>
+            )}
           </div>
         </div>
       </main>
