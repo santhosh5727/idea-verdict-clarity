@@ -136,14 +136,14 @@ serve(async (req) => {
   }
 
   try {
-    const { problem, solution, targetUsers, differentiation, projectType } = await req.json();
+    const { problem, solution, targetUsers, differentiation, workflow, projectType } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const userPrompt = `Evaluate this idea:
+    let userPrompt = `Evaluate this idea:
 
 PROJECT TYPE: ${projectType}
 
@@ -157,7 +157,16 @@ TARGET USERS:
 ${targetUsers}
 
 DIFFERENTIATION:
-${differentiation}
+${differentiation}`;
+
+    if (workflow) {
+      userPrompt += `
+
+WORKFLOW / MECHANISM (Optional context - do not reward complexity):
+${workflow}`;
+    }
+
+    userPrompt += `
 
 Provide your verdict following the exact output format.`;
 
