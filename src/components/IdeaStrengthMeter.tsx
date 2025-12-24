@@ -1,4 +1,10 @@
 import { useEffect, useState } from "react";
+import { 
+  parseStrengthScore, 
+  getDefinitiveVerdict, 
+  getFallbackScore,
+  getVerdictFromScore 
+} from "@/lib/verdictUtils";
 
 interface IdeaStrengthMeterProps {
   fullEvaluation: string;
@@ -8,28 +14,19 @@ interface IdeaStrengthMeterProps {
 const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
-  // Parse the AI-generated Idea Strength Score from the evaluation
-  const parseStrengthScore = (): number => {
-    // Look for "IDEA STRENGTH SCORE: X%" pattern
-    const scoreMatch = fullEvaluation.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
-    if (scoreMatch) {
-      const score = parseInt(scoreMatch[1], 10);
-      if (!isNaN(score) && score >= 0 && score <= 100) {
-        return score;
-      }
+  // Get score from evaluation, or fallback based on definitive verdict
+  const getTargetScore = (): number => {
+    const parsedScore = parseStrengthScore(fullEvaluation);
+    if (parsedScore !== null) {
+      return parsedScore;
     }
-
-    // Fallback based on verdict if no score found
-    if (verdict === "PROCEED TO MVP") {
-      return 65;
-    } else if (verdict === "BUILD ONLY IF NARROWED") {
-      return 40;
-    } else {
-      return 20;
-    }
+    
+    // Fallback: derive verdict from raw string and get fallback score
+    const verdictType = getDefinitiveVerdict(fullEvaluation, verdict);
+    return getFallbackScore(verdictType);
   };
 
-  const targetPercentage = parseStrengthScore();
+  const targetPercentage = getTargetScore();
 
   // Animate the percentage from 0 to target
   useEffect(() => {
@@ -51,16 +48,16 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) 
     return () => clearInterval(timer);
   }, [targetPercentage]);
 
-  // Determine color based on percentage
+  // Determine color based on percentage using same thresholds as verdict
   const getColor = (percentage: number): string => {
-    if (percentage <= 40) return "hsl(0, 84%, 60%)"; // Red
-    if (percentage <= 70) return "hsl(45, 93%, 47%)"; // Yellow
-    return "hsl(142, 71%, 45%)"; // Green
+    if (percentage < 40) return "hsl(0, 84%, 60%)"; // Red - KILL
+    if (percentage < 70) return "hsl(45, 93%, 47%)"; // Yellow - NARROW
+    return "hsl(142, 71%, 45%)"; // Green - BUILD
   };
 
   const getColorClass = (percentage: number): string => {
-    if (percentage <= 40) return "text-destructive";
-    if (percentage <= 70) return "text-warning";
+    if (percentage < 40) return "text-destructive";
+    if (percentage < 70) return "text-warning";
     return "text-primary";
   };
 
