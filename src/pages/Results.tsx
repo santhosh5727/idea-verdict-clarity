@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams, Navigate } from "react-router-dom";
-import { CheckCircle, XCircle, AlertTriangle, ArrowLeft, RotateCcw, Loader2, Copy, Check } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
-
+import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 interface EvaluationResult {
   verdict: string;
   fullEvaluation: string;
@@ -94,36 +94,9 @@ const Results = () => {
     return <Navigate to="/evaluate" replace />;
   }
 
-  // Determine verdict styling
-  const getVerdictConfig = (verdict: string) => {
-    if (verdict === "PROCEED TO MVP") {
-      return {
-        icon: CheckCircle,
-        color: "text-primary",
-        bgColor: "bg-primary/10",
-        borderColor: "border-primary/20",
-        label: "PROCEED TO MVP",
-      };
-    } else if (verdict === "BUILD ONLY IF NARROWED") {
-      return {
-        icon: AlertTriangle,
-        color: "text-warning",
-        bgColor: "bg-warning/10",
-        borderColor: "border-warning/20",
-        label: "BUILD ONLY IF NARROWED",
-      };
-    } else {
-      return {
-        icon: XCircle,
-        color: "text-destructive",
-        bgColor: "bg-destructive/10",
-        borderColor: "border-destructive/20",
-        label: "DO NOT BUILD",
-      };
-    }
-  };
-
-  const verdictConfig = getVerdictConfig(evaluation!.verdict);
+  // Use single source of truth for verdict (derived from score when available)
+  const definitiveVerdictType = getDefinitiveVerdict(evaluation!.fullEvaluation, evaluation!.verdict);
+  const verdictConfig = getVerdictConfig(definitiveVerdictType);
   const VerdictIcon = verdictConfig.icon;
 
   // Parse the full evaluation into sections
