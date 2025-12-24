@@ -4,11 +4,11 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 // Input validation schema
 const evaluateSchema = z.object({
-  problem: z.string().min(1).max(10000),
-  solution: z.string().max(10000).optional().default(""),
-  targetUsers: z.string().min(1).max(5000),
-  differentiation: z.string().max(5000).optional().default(""),
-  workflow: z.string().max(5000).optional(),
+  problem: z.string().min(1).max(15000),
+  solution: z.string().max(15000).optional().default(""),
+  targetUsers: z.string().min(1).max(15000),
+  differentiation: z.string().max(15000).optional().default(""),
+  workflow: z.string().max(20000).optional(),
   projectType: z.enum(["startup", "hardware", "academic", "personal"]).optional().default("startup"),
 });
 
