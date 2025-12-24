@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
+import { parseRawVerdict, VerdictType } from "@/lib/verdictUtils";
 import logo from "@/assets/logo.png";
 
 interface Evaluation {
@@ -34,15 +35,12 @@ const Dashboard = () => {
     fetchEvaluations();
   }, []);
 
-  const mapVerdict = (verdictType: string): "build" | "narrow" | "kill" => {
-    if (verdictType === "PROCEED TO MVP") return "build";
-    if (verdictType === "BUILD ONLY IF NARROWED") return "narrow";
-    return "kill";
-  };
+  // Use the centralized verdict parsing from verdictUtils
+  const getVerdict = (verdictType: string): VerdictType => parseRawVerdict(verdictType);
 
-  const buildCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "build").length;
-  const narrowCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "narrow").length;
-  const killCount = evaluations.filter((e) => mapVerdict(e.verdict_type) === "kill").length;
+  const buildCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "build").length;
+  const narrowCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "narrow").length;
+  const killCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "kill").length;
 
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
@@ -160,7 +158,7 @@ const Dashboard = () => {
               </div>
             ) : (
               evaluations.map((evaluation) => {
-                const verdict = mapVerdict(evaluation.verdict_type);
+                const verdict = getVerdict(evaluation.verdict_type);
                 const date = new Date(evaluation.created_at).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
