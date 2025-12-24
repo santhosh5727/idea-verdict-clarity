@@ -14,21 +14,27 @@ const evaluateSchema = z.object({
 
 // CORS headers with origin validation
 const getAllowedOrigins = () => {
-  const origins = [
+  return [
+    // Production domain
+    "https://ideaverdict.in",
+    "https://www.ideaverdict.in",
+    // Lovable preview domains
     "https://lovable.dev",
+    "https://ideaverdictin.lovable.app",
+    // Wildcard patterns for Lovable
     "https://*.lovable.app",
-    "https://*.lovableproject.com"
+    "https://*.lovableproject.com",
+    // Development
+    "http://localhost:5173",
+    "http://localhost:3000",
   ];
-  // Add localhost for development
-  if (Deno.env.get("DENO_ENV") !== "production") {
-    origins.push("http://localhost:5173", "http://localhost:3000");
-  }
-  return origins;
 };
 
 const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
   const allowedOrigins = getAllowedOrigins();
+  
+  console.log("Request origin:", origin);
   
   // Check if origin matches any allowed pattern
   const isAllowed = allowedOrigins.some(allowed => {
@@ -39,9 +45,12 @@ const getCorsHeaders = (req: Request) => {
     return allowed === origin;
   });
   
+  console.log("Origin allowed:", isAllowed);
+  
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : allowedOrigins[0],
+    "Access-Control-Allow-Origin": isAllowed ? origin : "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 };
 
