@@ -21,6 +21,7 @@ interface EvaluationResult {
 }
 
 interface EvaluationInputs {
+  projectType?: string;
   projectName?: string;
   problem: string;
   solution: string;
@@ -106,6 +107,7 @@ const Results = () => {
     navigate("/evaluate", {
       state: {
         editData: {
+          projectType: inputs.projectType || "",
           projectName: inputs.projectName || "",
           problem: inputs.problem,
           solution: inputs.solution,
@@ -188,6 +190,9 @@ const Results = () => {
       { key: "COMPETITIVE LANDSCAPE:", title: "Competitive Landscape" },
       { key: "EXISTING COMPANIES & REALITY CHECK:", title: "Existing Companies & Reality Check" },
       { key: "**EXISTING COMPANIES & REALITY CHECK:**", title: "Existing Companies & Reality Check" },
+      { key: "WHAT NEEDS TO CHANGE FOR THIS TO WORK:", title: "What Needs to Change" },
+      { key: "**WHAT NEEDS TO CHANGE FOR THIS TO WORK:**", title: "What Needs to Change" },
+      { key: "WHAT NEEDS TO CHANGE:", title: "What Needs to Change" },
       { key: "HARSH TRUTH:", title: "Harsh Truth" },
       { key: "WHAT WOULD CHANGE THIS VERDICT:", title: "What Would Change This Verdict" },
     ];

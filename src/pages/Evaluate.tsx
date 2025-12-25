@@ -12,9 +12,22 @@ import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
-const steps = ["Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow"];
+const PROJECT_TYPES = [
+  { id: "startup", label: "Startup / Business Idea" },
+  { id: "micro-saas", label: "Micro-SaaS / Indie Project" },
+  { id: "hardware", label: "Hardware / Engineering Project" },
+  { id: "academic", label: "Academic / College Project" },
+  { id: "personal", label: "Personal / Learning Experiment" },
+] as const;
+
+const steps = ["Project Type", "Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow"];
 
 const stepContent = [
+  {
+    heading: "What are you evaluating?",
+    placeholder: "",
+    isProjectType: true,
+  },
   {
     heading: "What's your project name?",
     placeholder: "Enter a name for your project...",
@@ -51,6 +64,7 @@ interface PrefilledData {
   targetUsers?: string;
   differentiation?: string;
   workflow?: string;
+  projectType?: string;
 }
 
 interface EditData extends PrefilledData {
@@ -63,8 +77,8 @@ const Evaluate = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  // answers: [projectName, problem, solution, targetUsers, differentiation, workflow]
-  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", ""]);
+  // answers: [projectType, projectName, problem, solution, targetUsers, differentiation, workflow]
+  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", "", ""]);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
 
@@ -75,6 +89,7 @@ const Evaluate = () => {
     if (state?.prefilled) {
       // From Nova - fill in the rest
       setAnswers([
+        state.prefilled.projectType || "", // project type
         "", // project name - user will fill this
         state.prefilled.problem || "",
         state.prefilled.solution || "",
@@ -87,6 +102,7 @@ const Evaluate = () => {
     } else if (state?.editData) {
       // From Results page for re-evaluation
       setAnswers([
+        state.editData.projectType || "",
         state.editData.projectName || "",
         state.editData.problem || "",
         state.editData.solution || "",
@@ -126,13 +142,18 @@ const Evaluate = () => {
           return;
         }
 
+        // Get project type label from selected id
+        const selectedProjectType = PROJECT_TYPES.find(pt => pt.id === answers[0])?.label || answers[0];
+
         // Normalize payload - AI will infer both category and execution mode
+        // projectType is passed as context only
         const payload = {
-          problem: answers[1].trim(),
-          solution: answers[2].trim() || undefined,
-          targetUsers: answers[3].trim(),
-          differentiation: answers[4].trim() || undefined,
-          workflow: answers[5].trim() || undefined,
+          projectType: selectedProjectType,
+          problem: answers[2].trim(),
+          solution: answers[3].trim() || undefined,
+          targetUsers: answers[4].trim(),
+          differentiation: answers[5].trim() || undefined,
+          workflow: answers[6].trim() || undefined,
         };
 
         const response = await fetch(
@@ -166,17 +187,16 @@ const Evaluate = () => {
         const result = await response.json();
         
         // Save evaluation to database
-        // Note: category and execution mode are inferred by AI
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
             user_id: user.id,
-            project_name: answers[0].trim() || null,
+            project_name: answers[1].trim() || null,
             idea_problem: payload.problem,
             solution: payload.solution || null,
             target_user: payload.targetUsers,
             differentiation: payload.differentiation || null,
             workflow: payload.workflow || null,
-            project_type: result.inferredCategory || "Other",
+            project_type: selectedProjectType,
             verdict_type: result.verdict,
             full_verdict_text: result.fullEvaluation,
             inferred_category: result.inferredCategory || null,
@@ -193,7 +213,8 @@ const Evaluate = () => {
           state: { 
             evaluation: result,
             inputs: {
-              projectName: answers[0].trim(),
+              projectType: selectedProjectType,
+              projectName: answers[1].trim(),
               problem: payload.problem,
               solution: payload.solution,
               targetUsers: payload.targetUsers,
@@ -223,10 +244,11 @@ const Evaluate = () => {
   // Minimum character requirements per step
   const getMinChars = (stepIndex: number): number => {
     switch (stepIndex) {
-      case 0: return 2;   // Project Name
-      case 1: return 80;  // Problem Description
-      case 2: return 20;  // Solution
-      case 3: return 20;  // Target Users
+      case 0: return 0;   // Project Type (selection-based)
+      case 1: return 2;   // Project Name
+      case 2: return 80;  // Problem Description
+      case 3: return 20;  // Solution
+      case 4: return 20;  // Target Users
       default: return 0;
     }
   };
@@ -235,11 +257,12 @@ const Evaluate = () => {
   const getTrimmedLength = (text: string): number => text.trim().length;
 
   // Check if current step meets minimum requirements
-  const isOptionalStep = stepContent[currentStep].isOptional;
-  const isProjectNameStep = stepContent[currentStep].isProjectName;
+  const isOptionalStep = stepContent[currentStep]?.isOptional;
+  const isProjectNameStep = stepContent[currentStep]?.isProjectName;
+  const isProjectTypeStep = stepContent[currentStep]?.isProjectType;
   const minChars = getMinChars(currentStep);
   const currentTrimmedLength = getTrimmedLength(answers[currentStep]);
-  const meetsMinimum = currentTrimmedLength >= minChars;
+  const meetsMinimum = isProjectTypeStep ? answers[currentStep] !== "" : currentTrimmedLength >= minChars;
 
   const canContinue = isOptionalStep || meetsMinimum;
 
@@ -247,6 +270,9 @@ const Evaluate = () => {
   const getValidationMessage = (): string | null => {
     if (isOptionalStep) return null;
     if (meetsMinimum) return null;
+    if (isProjectTypeStep) {
+      return "Please select a project type to continue.";
+    }
     if (isProjectNameStep && minChars > 0) {
       return "Please enter a project name.";
     }
@@ -291,8 +317,8 @@ const Evaluate = () => {
       <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">
         <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16">
           <div className="mx-auto max-w-3xl">
-            {/* Positioning Copy - show on first step */}
-            {currentStep === 0 && (
+            {/* Positioning Copy - show on second step (after project type) */}
+            {currentStep === 1 && (
               <div className="mb-6 p-4 rounded-lg border border-border/50 bg-muted/30">
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   <strong className="text-foreground">Note:</strong> This engine is optimized to prevent wasted effort on low-leverage ideas. 
@@ -313,16 +339,33 @@ const Evaluate = () => {
             </h1>
 
             {/* Subtitle */}
-            {stepContent[currentStep].subtitle && (
+            {stepContent[currentStep]?.subtitle && (
               <p className="mb-8 text-muted-foreground">
                 {stepContent[currentStep].subtitle}
               </p>
             )}
 
             {/* Input Fields */}
-            {isProjectNameStep ? (
+            {isProjectTypeStep ? (
+              <div className="grid gap-3 mt-6">
+                {PROJECT_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => handleAnswerChange(type.id)}
+                    className={`w-full p-4 rounded-xl border text-left transition-all ${
+                      answers[currentStep] === type.id
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border/50 bg-card/90 text-foreground/80 hover:border-primary/50 hover:bg-primary/5"
+                    }`}
+                  >
+                    <span className="font-medium">{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : isProjectNameStep ? (
               <>
-                {!stepContent[currentStep].subtitle && <div className="mb-6" />}
+                {!stepContent[currentStep]?.subtitle && <div className="mb-6" />}
                 <Input
                   placeholder={stepContent[currentStep].placeholder}
                   value={answers[currentStep]}
@@ -333,7 +376,7 @@ const Evaluate = () => {
               </>
             ) : (
               <>
-                {!stepContent[currentStep].subtitle && <div className="mb-6" />}
+                {!stepContent[currentStep]?.subtitle && <div className="mb-6" />}
                 <Textarea
                   placeholder={stepContent[currentStep].placeholder}
                   value={answers[currentStep]}
