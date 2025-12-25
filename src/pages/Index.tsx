@@ -85,17 +85,9 @@ const Index = () => {
         
         <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-20 md:py-32">
           <div className="mx-auto max-w-3xl text-center">
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <img 
-                src={logo} 
-                alt="IdeaVerdict" 
-                className="h-10 sm:h-12 md:h-14 w-auto flex-shrink-0"
-                style={{ filter: 'hue-rotate(-10deg)' }}
-              />
-              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
-                Evaluate Your Startup Idea Before You Waste Time Building
-              </h1>
-            </div>
+            <h1 className="mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
+              Evaluate Your Startup Idea Before You Waste Time Building
+            </h1>
             <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto px-2">
               Get honest feedback in minutes. IdeaVerdict tells you if your idea is worth building — or if you should move on.
             </p>

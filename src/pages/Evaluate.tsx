@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -368,13 +368,8 @@ const Evaluate = () => {
 
             {/* Heading */}
             {isProjectTypeStep ? (
-              <div className="flex items-center gap-3 mb-2">
-                <img 
-                  src={logo} 
-                  alt="IdeaVerdict" 
-                  className="h-8 sm:h-10 w-auto flex-shrink-0"
-                  style={{ filter: 'hue-rotate(-10deg)' }}
-                />
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="h-6 w-6 sm:h-7 sm:w-7 text-primary flex-shrink-0" />
                 <h1 className="text-2xl font-bold text-foreground md:text-3xl">
                   {stepContent[currentStep].heading}
                 </h1>
