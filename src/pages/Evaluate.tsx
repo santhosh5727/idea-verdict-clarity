@@ -367,9 +367,23 @@ const Evaluate = () => {
             </p>
 
             {/* Heading */}
-            <h1 className="mb-2 text-2xl font-bold text-foreground md:text-3xl">
-              {stepContent[currentStep].heading}
-            </h1>
+            {isProjectTypeStep ? (
+              <div className="flex items-center gap-3 mb-2">
+                <img 
+                  src={logo} 
+                  alt="IdeaVerdict" 
+                  className="h-8 sm:h-10 w-auto flex-shrink-0"
+                  style={{ filter: 'hue-rotate(-10deg)' }}
+                />
+                <h1 className="text-2xl font-bold text-foreground md:text-3xl">
+                  {stepContent[currentStep].heading}
+                </h1>
+              </div>
+            ) : (
+              <h1 className="mb-2 text-2xl font-bold text-foreground md:text-3xl">
+                {stepContent[currentStep].heading}
+              </h1>
+            )}
 
             {/* Subtitle */}
             {stepContent[currentStep]?.subtitle && (
