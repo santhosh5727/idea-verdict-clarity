@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
-import { parseRawVerdict, VerdictType } from "@/lib/verdictUtils";
+import { getDefinitiveVerdict, VerdictType } from "@/lib/verdictUtils";
 import logo from "@/assets/logo.png";
 
 interface Evaluation {
@@ -12,6 +12,7 @@ interface Evaluation {
   project_name: string | null;
   idea_problem: string;
   verdict_type: string;
+  full_verdict_text: string;
   created_at: string;
 }
 
@@ -23,7 +24,7 @@ const Dashboard = () => {
     const fetchEvaluations = async () => {
       const { data, error } = await supabase
         .from("evaluations")
-        .select("id, project_name, idea_problem, verdict_type, created_at")
+        .select("id, project_name, idea_problem, verdict_type, full_verdict_text, created_at")
         .order("created_at", { ascending: false });
       
       if (error) {
@@ -36,12 +37,13 @@ const Dashboard = () => {
     fetchEvaluations();
   }, []);
 
-  // Use the centralized verdict parsing from verdictUtils
-  const getVerdict = (verdictType: string): VerdictType => parseRawVerdict(verdictType);
+  // Use score-based deterministic verdict (SINGLE SOURCE OF TRUTH)
+  const getVerdict = (evaluation: Evaluation): VerdictType => 
+    getDefinitiveVerdict(evaluation.full_verdict_text, evaluation.verdict_type);
 
-  const buildCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "build").length;
-  const narrowCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "narrow").length;
-  const killCount = evaluations.filter((e) => getVerdict(e.verdict_type) === "kill").length;
+  const buildCount = evaluations.filter((e) => getVerdict(e) === "build").length;
+  const narrowCount = evaluations.filter((e) => getVerdict(e) === "narrow").length;
+  const killCount = evaluations.filter((e) => getVerdict(e) === "kill").length;
 
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
@@ -171,8 +173,8 @@ const Dashboard = () => {
                 </Link>
               </div>
             ) : (
-              evaluations.map((evaluation) => {
-                const verdict = getVerdict(evaluation.verdict_type);
+            evaluations.map((evaluation) => {
+                const verdict = getVerdict(evaluation);
                 const date = new Date(evaluation.created_at).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",

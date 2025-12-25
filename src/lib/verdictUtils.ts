@@ -63,16 +63,27 @@ export const parseRawVerdict = (verdict: string): VerdictType => {
 /**
  * Get the definitive verdict by prioritizing score over raw verdict string
  * This ensures consistency between the meter and the verdict card
+ * 
+ * CRITICAL: Verdict is ALWAYS derived from score using deterministic thresholds:
+ * - Score >= 70 → BUILD
+ * - Score 40-69 → NARROW  
+ * - Score < 40 → KILL
+ * 
+ * The AI's verdict text is NEVER trusted as source of truth.
  */
 export const getDefinitiveVerdict = (fullEvaluation: string, rawVerdict: string): VerdictType => {
   const score = parseStrengthScore(fullEvaluation);
   
-  // If we have a score, derive verdict from it (single source of truth)
+  // If we have a score, derive verdict from it (SINGLE SOURCE OF TRUTH)
+  // This is the ONLY reliable way to determine verdict
   if (score !== null) {
-    return getVerdictFromScore(score);
+    const computedVerdict = getVerdictFromScore(score);
+    console.log(`[verdictUtils] Score: ${score}% → Verdict: ${computedVerdict}`);
+    return computedVerdict;
   }
   
-  // Fallback to parsing the raw verdict string
+  // Fallback to parsing the raw verdict string (should rarely happen)
+  console.warn(`[verdictUtils] No score found in evaluation, falling back to raw verdict parsing`);
   return parseRawVerdict(rawVerdict);
 };
 

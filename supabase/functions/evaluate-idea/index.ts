@@ -333,17 +333,43 @@ Provide your verdict following the exact output format.`;
       throw new Error("No evaluation result received");
     }
 
-    // Parse the verdict from the response
-    let verdict = "DO NOT BUILD";
-    const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|BUILD|DO NOT BUILD|OPTIONAL)/i);
-    if (verdictMatch) {
-      verdict = verdictMatch[1].toUpperCase();
-    } else if (evaluationResult.includes("BUILD ONLY IF NARROWED")) {
-      verdict = "BUILD ONLY IF NARROWED";
-    } else if (evaluationResult.includes("OPTIONAL")) {
-      verdict = "OPTIONAL";
-    } else if (/\bVERDICT:?\s*BUILD\b/i.test(evaluationResult)) {
-      verdict = "BUILD";
+    // Parse the score from the evaluation - this is the SINGLE SOURCE OF TRUTH
+    const scoreMatch = evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
+    let score: number | null = null;
+    if (scoreMatch) {
+      const parsedScore = parseInt(scoreMatch[1], 10);
+      if (!isNaN(parsedScore) && parsedScore >= 0 && parsedScore <= 100) {
+        score = parsedScore;
+      }
+    }
+
+    // Deterministic verdict based on score (NEVER trust AI's verdict string)
+    // Score >= 70 → BUILD, Score 40-69 → NARROW, Score < 40 → KILL
+    let verdict: string;
+    if (score !== null) {
+      if (score >= 70) {
+        verdict = "BUILD";
+      } else if (score >= 40) {
+        verdict = "BUILD ONLY IF NARROWED";
+      } else {
+        verdict = "DO NOT BUILD";
+      }
+      console.log(`Deterministic verdict: score=${score}% → ${verdict}`);
+    } else {
+      // Fallback ONLY if no score found (should rarely happen)
+      // Parse AI's verdict string as last resort
+      verdict = "DO NOT BUILD";
+      const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|BUILD|DO NOT BUILD|OPTIONAL)/i);
+      if (verdictMatch) {
+        verdict = verdictMatch[1].toUpperCase();
+      } else if (evaluationResult.includes("BUILD ONLY IF NARROWED")) {
+        verdict = "BUILD ONLY IF NARROWED";
+      } else if (evaluationResult.includes("OPTIONAL")) {
+        verdict = "OPTIONAL";
+      } else if (/\bVERDICT:?\s*BUILD\b/i.test(evaluationResult)) {
+        verdict = "BUILD";
+      }
+      console.log(`Fallback verdict (no score found): ${verdict}`);
     }
 
     return new Response(
@@ -351,6 +377,7 @@ Provide your verdict following the exact output format.`;
         verdict,
         fullEvaluation: evaluationResult,
         projectType,
+        score, // Include score in response for transparency
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
