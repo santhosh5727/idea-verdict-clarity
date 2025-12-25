@@ -5,22 +5,54 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are a Verdict Assistant.
+const buildSystemPrompt = (
+  ideaProblem: string,
+  verdictType: string,
+  score: string,
+  fullEvaluation: string
+) => {
+  return `You are a friendly Verdict Assistant helping users understand their startup idea evaluation.
 
-You DO NOT judge ideas.
-You DO NOT change verdicts.
-You ONLY explain, clarify, and answer questions based on the EXISTING verdict text.
+CONTEXT - THE IDEA BEING EVALUATED:
+"${ideaProblem}"
 
-Rules:
-- Never reassess the idea
-- Never suggest BUILD if verdict is negative
-- Explain failures in simple language
-- Answer doubts concisely and clearly
-- If the user asks emotional or vague questions, redirect to concrete reasons from the verdict.
+VERDICT RESULT: ${verdictType}
+IDEA STRENGTH SCORE: ${score}%
 
-The verdict is FINAL and cannot be changed. You exist to help users understand the verdict, not to challenge it.
+FULL EVALUATION:
+${fullEvaluation}
 
-Keep responses concise (2-4 sentences) unless more detail is requested.`;
+YOUR ROLE:
+- Answer questions about this specific evaluation conversationally and helpfully
+- Reference specific parts of the evaluation when relevant (e.g., "Looking at the Target User section...")
+- Quote actual reasoning from the evaluation to back up your points
+- Be conversational, not robotic - use a friendly, helpful tone
+- Ask clarifying questions when needed (e.g., "Are you asking about technical feasibility or market viability?")
+- Keep responses concise (2-3 paragraphs max)
+
+STRICT RULES:
+- NEVER suggest new ideas or pivots
+- NEVER do re-evaluations or give new scores
+- NEVER change or challenge the verdict
+- ONLY discuss and explain the existing evaluation
+- If asked to re-score or change verdict, politely explain the verdict is final and offer to clarify it instead
+
+Remember: Be helpful and conversational, like a knowledgeable friend explaining the evaluation.`;
+};
+
+const parseScoreFromEvaluation = (fullEvaluation: string): string => {
+  const patterns = [
+    /idea\s*strength[:\s]*(\d+)%/i,
+    /score[:\s]*(\d+)%/i,
+    /(\d+)%\s*(?:idea\s*)?strength/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = fullEvaluation.match(pattern);
+    if (match) return match[1];
+  }
+  return "N/A";
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -33,17 +65,17 @@ serve(async (req) => {
     const message = body.message?.trim() || "";
     const verdictText = body.verdict_text || body.verdict || "";
     const verdictType = body.verdict_type || body.verdictType || "UNKNOWN";
+    const ideaProblem = body.idea_problem || "";
     const conversationHistory = body.conversationHistory || [];
+    const isFirstMessage = body.isFirstMessage || false;
 
-    console.log("VERDICT CHAT PAYLOAD", { message, verdictType, hasVerdictText: !!verdictText });
-
-    // Validate minimum message length
-    if (message.length < 3) {
-      return new Response(
-        JSON.stringify({ response: "Please ask a more detailed question (at least 3 characters)." }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log("VERDICT CHAT PAYLOAD", { 
+      message, 
+      verdictType, 
+      hasVerdictText: !!verdictText,
+      hasIdeaProblem: !!ideaProblem,
+      isFirstMessage 
+    });
 
     // Validate verdict exists
     if (!verdictText) {
@@ -62,20 +94,15 @@ serve(async (req) => {
       );
     }
 
-    // Build context
-    const evaluationContext = `
-VERDICT CONTEXT:
-Verdict Type: ${verdictType}
-Full Verdict:
-${verdictText}
+    // Parse score from evaluation
+    const score = parseScoreFromEvaluation(verdictText);
 
----
-Answer questions about this verdict. Remember: the verdict is FINAL.
-`;
+    // Build system prompt with full context
+    const systemPrompt = buildSystemPrompt(ideaProblem, verdictType, score, verdictText);
 
     // Build messages
     const messages: { role: string; content: string }[] = [
-      { role: "system", content: SYSTEM_PROMPT + "\n\n" + evaluationContext },
+      { role: "system", content: systemPrompt },
     ];
     
     // Add conversation history
@@ -87,8 +114,24 @@ Answer questions about this verdict. Remember: the verdict is FINAL.
       }
     }
 
-    // Add current message
-    messages.push({ role: "user", content: message });
+    // For first message, generate the greeting
+    if (isFirstMessage) {
+      const verdictLabel = verdictType === "build" ? "BUILD" : 
+                          verdictType === "narrow" ? "NARROW" : "DO NOT BUILD";
+      messages.push({ 
+        role: "user", 
+        content: `Generate a brief, friendly greeting introducing yourself and the evaluation result. The verdict is ${verdictLabel} with a score of ${score}%. Invite them to ask questions about any part of the evaluation. Keep it to 2-3 sentences, be conversational.` 
+      });
+    } else {
+      // Validate minimum message length for user messages
+      if (message.length < 3) {
+        return new Response(
+          JSON.stringify({ response: "Please ask a more detailed question (at least 3 characters)." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      messages.push({ role: "user", content: message });
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
