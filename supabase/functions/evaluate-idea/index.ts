@@ -10,6 +10,7 @@ const evaluateSchema = z.object({
   differentiation: z.string().max(15000).optional().default(""),
   workflow: z.string().max(20000).optional(),
   projectType: z.enum(["startup", "hardware", "academic", "personal"]).optional().default("startup"),
+  evaluationMode: z.enum(["indie", "venture", "academic"]).optional().default("indie"),
 });
 
 // CORS headers with origin validation
@@ -54,9 +55,48 @@ const getCorsHeaders = (req: Request) => {
   };
 };
 
-const SYSTEM_PROMPT = `You are Idea Verdict, an intentionally harsh startup evaluator.
+const getSystemPrompt = (evaluationMode: string) => {
+  const modeContext = {
+    indie: `
+MODE: INDIE / MICRO-SAAS
+This mode is optimized for solo founders and small teams building bootstrapped products.
+Evaluation priorities:
+- Can one person or small team ship this?
+- Is there a clear path to $10K-$100K MRR?
+- Does it require venture funding to succeed? (If yes, penalize)
+- Can it be profitable without massive scale?`,
+    venture: `
+MODE: VENTURE / INFRA / HARD TECH
+This mode accounts for high-difficulty, high-capital ideas where execution risk is accepted.
+Evaluation priorities:
+- Is the market large enough to justify venture funding?
+- Is technical difficulty creating a real moat?
+- Does complexity serve a purpose or is it self-imposed?
+- Allow high difficulty scores but do NOT inflate viability just because it's "hard tech"`,
+    academic: `
+MODE: ACADEMIC / LEARNING PROJECT
+This mode judges learning value and technical growth, NOT monetization.
+Evaluation priorities:
+- Does this teach valuable skills?
+- Is the scope appropriate for learning?
+- Will completing this build portfolio-worthy work?
+- Ignore market viability, focus on educational merit`
+  };
+
+  return `You are Idea Verdict, an intentionally harsh startup evaluator.
 Your job is to stress-test ideas like a skeptical investor who has seen 10,000 pitches and funded 5.
 ASSUME EVERY IDEA IS WEAK unless it proves otherwise with clear, undeniable evidence.
+
+${modeContext[evaluationMode as keyof typeof modeContext] || modeContext.indie}
+
+────────────────────────
+SYSTEM POSITIONING (User will see this)
+────────────────────────
+
+This engine is optimized to prevent wasted effort on low-leverage ideas.
+It is intentionally conservative and biased against high-risk execution.
+A low score does NOT mean the idea is bad.
+It means the execution risk is high under the selected mode.
 
 ────────────────────────
 YOUR MINDSET
@@ -105,37 +145,33 @@ Before scoring, check these DISQUALIFYING conditions. If ANY apply, the idea CAN
    → CAP AT 50.
 
 ────────────────────────
-STEP 3: EVALUATION CRITERIA (For Startups)
+STEP 3: SCORING (TWO SEPARATE AXES)
 ────────────────────────
 
-Only score AFTER checking negative gates. Penalize heavily for:
+You MUST provide TWO separate signals. Do NOT collapse them.
 
-1. **Problem Severity (0–25)**
-   - 20-25: Urgent, painful, people are actively paying to solve it NOW
-   - 10-19: Real but not urgent, people complain but tolerate it
-   - 0-9: Nice-to-have, mild inconvenience, theoretical problem
+**AXIS 1: VIABILITY SCORE (0–100)**
+Definition: "Probability that this idea can succeed in principle, given the evaluation mode."
 
-2. **Solution Quality (0–25)**
-   - 20-25: 10x better than alternatives, obvious improvement
-   - 10-19: Incrementally better, marginal improvement
-   - 0-9: Different but not better, or solves wrong problem
+For Startups (Indie mode):
+1. Problem Severity (0–25): How painful and urgent?
+2. Solution Quality (0–25): How much better than alternatives?
+3. Market Reality (0–20): Proven willingness to pay?
+4. Differentiation (0–15): Defensible moat?
+5. Execution Feasibility (0–15): Can be shipped with current resources?
 
-3. **Market Reality (0–20)**
-   - 15-20: Clear buyers with budget, proven willingness to pay
-   - 8-14: Market exists but crowded or price-sensitive
-   - 0-7: Unproven demand, or dominated by giants
+For Venture mode: Allow higher complexity but require proportional market size.
+For Academic mode: Score learning value, skill development, and project completion feasibility.
 
-4. **Differentiation (0–15)**
-   - 12-15: Defensible moat (network effects, proprietary tech, unique access)
-   - 6-11: Some differentiation but easily copied
-   - 0-5: No meaningful differentiation
+**AXIS 2: EXECUTION DIFFICULTY**
+One of: LOW | MEDIUM | EXTREME
 
-5. **Execution Feasibility (0–15)**
-   - 12-15: Team can ship this with current resources
-   - 6-11: Significant but solvable challenges
-   - 0-5: Requires unrealistic resources or breakthroughs
+- LOW: Single founder can ship in weeks/months, known tech stack, clear playbook
+- MEDIUM: Requires team, 6-12 months runway, some technical uncertainty
+- EXTREME: Requires significant capital, multi-year timeline, unproven tech, or regulatory hurdles
 
-FOR PROJECTS/EXPERIMENTS: Be more lenient—focus on learning value and completion feasibility.
+CRITICAL: High difficulty does NOT reduce viability. Hard problems can be highly viable.
+         Easy problems can have low viability.
 
 ────────────────────────
 SCORING PHILOSOPHY
@@ -146,7 +182,7 @@ SCORING PHILOSOPHY
 - <40 (DO NOT BUILD): Ideas with fatal flaws, no real pain, or insurmountable barriers.
 
 DO NOT BE NICE. An idea scoring 65 is NOT good—it means "maybe viable if you fix major issues."
-Round to nearest 5.
+Round viability to nearest 5.
 
 ────────────────────────
 COMPETITION REALITY CHECK
@@ -167,8 +203,11 @@ PROJECT TYPE: [Startup | Project | Own Experiment]
 
 VERDICT: [Will be overridden by score-based logic]
 
-IDEA STRENGTH SCORE: [X]%
+VIABILITY SCORE: [X]%
 (What drove the score—be blunt about weaknesses)
+
+EXECUTION DIFFICULTY: [LOW | MEDIUM | EXTREME]
+(Justify: What makes this easy or hard to execute?)
 
 NEGATIVE GATES TRIGGERED:
 (List any caps applied and why)
@@ -185,6 +224,14 @@ CRITICAL WEAKNESSES:
 COMPETITIVE LANDSCAPE:
 (Who else solves this? Why would users switch?)
 
+**EXISTING COMPANIES & REALITY CHECK:**
+(REQUIRED for DO NOT BUILD and BUILD ONLY IF NARROWED verdicts)
+- List 2-4 real companies or categories doing similar work
+- State why they survive (what do they have that this idea lacks?)
+- State why a new entrant struggles here
+- Use cautious phrasing if uncertain ("examples include", "companies like")
+- Do NOT invent fake startups
+
 HARSH TRUTH:
 (One sentence the founder doesn't want to hear but needs to)
 
@@ -195,6 +242,7 @@ REMEMBER
 Your skepticism is a GIFT. Founders who survive your scrutiny have a real shot.
 Those who don't were saved years of their life.
 Be harsh. Be honest. Most ideas fail—help founders fail FAST or succeed INFORMED.`;
+};
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -243,14 +291,22 @@ serve(async (req) => {
       );
     }
 
-    const { problem, solution, targetUsers, differentiation, workflow, projectType } = parseResult.data;
+    const { problem, solution, targetUsers, differentiation, workflow, projectType, evaluationMode } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const modeLabels: Record<string, string> = {
+      indie: "Indie / Micro-SaaS",
+      venture: "Venture / Infra / Hard Tech",
+      academic: "Academic / Learning Project"
+    };
+
     let userPrompt = `Evaluate this idea:
+
+EVALUATION MODE: ${modeLabels[evaluationMode] || "Indie / Micro-SaaS"}
 
 PROJECT TYPE: ${projectType}
 
@@ -275,7 +331,7 @@ ${workflow}`;
 
     userPrompt += `
 
-Provide your verdict following the exact output format.`;
+Provide your verdict following the exact output format. Remember to include BOTH Viability Score AND Execution Difficulty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -286,7 +342,7 @@ Provide your verdict following the exact output format.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: getSystemPrompt(evaluationMode) },
           { role: "user", content: userPrompt },
         ],
       }),
@@ -317,31 +373,35 @@ Provide your verdict following the exact output format.`;
       throw new Error("No evaluation result received");
     }
 
-    // Parse the score from the evaluation - this is the SINGLE SOURCE OF TRUTH
-    const scoreMatch = evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
-    let score: number | null = null;
+    // Parse the VIABILITY SCORE from the evaluation - this is the SINGLE SOURCE OF TRUTH
+    const scoreMatch = evaluationResult.match(/VIABILITY SCORE:\s*(\d+)%?/i) || 
+                       evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
+    let viabilityScore: number | null = null;
     if (scoreMatch) {
       const parsedScore = parseInt(scoreMatch[1], 10);
       if (!isNaN(parsedScore) && parsedScore >= 0 && parsedScore <= 100) {
-        score = parsedScore;
+        viabilityScore = parsedScore;
       }
     }
 
-    // Deterministic verdict based on score (NEVER trust AI's verdict string)
+    // Parse EXECUTION DIFFICULTY
+    const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY:\s*(LOW|MEDIUM|EXTREME)/i);
+    const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : "MEDIUM";
+
+    // Deterministic verdict based on viability score (NEVER trust AI's verdict string)
     // Score >= 70 → BUILD, Score 40-69 → NARROW, Score < 40 → KILL
     let verdict: string;
-    if (score !== null) {
-      if (score >= 70) {
+    if (viabilityScore !== null) {
+      if (viabilityScore >= 70) {
         verdict = "BUILD";
-      } else if (score >= 40) {
+      } else if (viabilityScore >= 40) {
         verdict = "BUILD ONLY IF NARROWED";
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: score=${score}% → ${verdict}`);
+      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty} → ${verdict}`);
     } else {
       // Fallback ONLY if no score found (should rarely happen)
-      // Parse AI's verdict string as last resort
       verdict = "DO NOT BUILD";
       const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|BUILD|DO NOT BUILD|OPTIONAL)/i);
       if (verdictMatch) {
@@ -361,7 +421,9 @@ Provide your verdict following the exact output format.`;
         verdict,
         fullEvaluation: evaluationResult,
         projectType,
-        score, // Include score in response for transparency
+        evaluationMode,
+        viabilityScore,
+        executionDifficulty,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

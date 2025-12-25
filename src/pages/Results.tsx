@@ -13,6 +13,9 @@ interface EvaluationResult {
   verdict: string;
   fullEvaluation: string;
   projectType: string;
+  evaluationMode?: string;
+  viabilityScore?: number;
+  executionDifficulty?: string;
 }
 
 interface EvaluationInputs {
@@ -23,6 +26,7 @@ interface EvaluationInputs {
   differentiation: string;
   workflow?: string;
   projectType: string;
+  evaluationMode?: string;
 }
 
 const Results = () => {
@@ -66,6 +70,7 @@ const Results = () => {
           differentiation: inputs.differentiation,
           workflow: inputs.workflow || "",
           projectType: inputs.projectType,
+          evaluationMode: inputs.evaluationMode || "indie",
           evaluationId: dbEvaluationId,
         },
       },
@@ -131,31 +136,51 @@ const Results = () => {
     const sections: { title: string; content: string }[] = [];
     
     const sectionPatterns = [
+      { key: "PRIMARY REASON:", title: "Primary Reason" },
       { key: "PRIMARY BLOCKER:", title: "Primary Blocker" },
       { key: "WHY THIS MATTERS:", title: "Why This Matters" },
+      { key: "NEGATIVE GATES TRIGGERED:", title: "Negative Gates Triggered" },
+      { key: "STRENGTHS:", title: "Strengths" },
       { key: "WHAT PASSED:", title: "What Passed" },
+      { key: "CRITICAL WEAKNESSES:", title: "Critical Weaknesses" },
       { key: "WHAT FAILED:", title: "What Failed" },
+      { key: "COMPETITIVE LANDSCAPE:", title: "Competitive Landscape" },
+      { key: "EXISTING COMPANIES & REALITY CHECK:", title: "Existing Companies & Reality Check" },
+      { key: "**EXISTING COMPANIES & REALITY CHECK:**", title: "Existing Companies & Reality Check" },
+      { key: "HARSH TRUTH:", title: "Harsh Truth" },
       { key: "WHAT WOULD CHANGE THIS VERDICT:", title: "What Would Change This Verdict" },
     ];
 
     let remainingText = text;
     
-    // Remove the VERDICT line from the text
+    // Remove header lines from the text
     remainingText = remainingText.replace(/VERDICT:\s*\n?[^\n]*\n?/i, "");
+    remainingText = remainingText.replace(/PROJECT TYPE:\s*\n?[^\n]*\n?/i, "");
+    remainingText = remainingText.replace(/VIABILITY SCORE:\s*\n?[^\n]*\n?/i, "");
+    remainingText = remainingText.replace(/IDEA STRENGTH SCORE:\s*\n?[^\n]*\n?/i, "");
+    remainingText = remainingText.replace(/EXECUTION DIFFICULTY:\s*\n?[^\n]*\n?/i, "");
 
-    sectionPatterns.forEach((pattern, index) => {
+    sectionPatterns.forEach((pattern) => {
       const startIndex = remainingText.indexOf(pattern.key);
       if (startIndex !== -1) {
-        const nextPattern = sectionPatterns[index + 1];
-        const endIndex = nextPattern 
-          ? remainingText.indexOf(nextPattern.key)
-          : remainingText.length;
+        // Find the next section start
+        let endIndex = remainingText.length;
+        for (const nextPattern of sectionPatterns) {
+          if (nextPattern.key === pattern.key) continue;
+          const nextStart = remainingText.indexOf(nextPattern.key, startIndex + pattern.key.length);
+          if (nextStart !== -1 && nextStart < endIndex) {
+            endIndex = nextStart;
+          }
+        }
         
         let content = remainingText
-          .substring(startIndex + pattern.key.length, endIndex !== -1 ? endIndex : undefined)
+          .substring(startIndex + pattern.key.length, endIndex)
           .trim();
         
-        if (content) {
+        // Clean up markdown formatting
+        content = content.replace(/^\*\*|\*\*$/g, '').trim();
+        
+        if (content && !sections.find(s => s.title === pattern.title)) {
           sections.push({ title: pattern.title, content });
         }
       }
@@ -223,10 +248,11 @@ const Results = () => {
                 </div>
               </div>
 
-              {/* Idea Strength Meter */}
+              {/* Viability Score + Execution Difficulty */}
               <IdeaStrengthMeter 
                 fullEvaluation={evaluation.fullEvaluation} 
-                verdict={evaluation.verdict} 
+                verdict={evaluation.verdict}
+                evaluationMode={inputs?.evaluationMode || evaluation.evaluationMode}
               />
             </div>
 
