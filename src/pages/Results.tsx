@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useSearchParams, Navigate } from "react-router-dom";
-import { ArrowLeft, RotateCcw, Loader2, Copy, Check } from "lucide-react";
+import { Link, useLocation, useSearchParams, Navigate, useNavigate } from "react-router-dom";
+import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
@@ -8,6 +8,7 @@ import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
 import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
+
 interface EvaluationResult {
   verdict: string;
   fullEvaluation: string;
@@ -15,15 +16,18 @@ interface EvaluationResult {
 }
 
 interface EvaluationInputs {
+  projectName?: string;
   problem: string;
   solution: string;
   targetUsers: string;
   differentiation: string;
+  workflow?: string;
   projectType: string;
 }
 
 const Results = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const evaluationId = searchParams.get("id");
   const state = location.state as { evaluation: EvaluationResult; inputs: EvaluationInputs } | null;
@@ -32,6 +36,7 @@ const Results = () => {
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(state?.evaluation || null);
   const [inputs, setInputs] = useState<EvaluationInputs | null>(state?.inputs || null);
   const [copied, setCopied] = useState(false);
+  const [dbEvaluationId, setDbEvaluationId] = useState<string | null>(evaluationId);
 
   const handleCopyResult = async () => {
     if (!evaluation) return;
@@ -46,6 +51,25 @@ const Results = () => {
     } catch (err) {
       toast.error("Failed to copy to clipboard");
     }
+  };
+
+  const handleEditAndReEvaluate = () => {
+    if (!inputs) return;
+    
+    navigate("/evaluate", {
+      state: {
+        editData: {
+          projectName: inputs.projectName || "",
+          problem: inputs.problem,
+          solution: inputs.solution,
+          targetUsers: inputs.targetUsers,
+          differentiation: inputs.differentiation,
+          workflow: inputs.workflow || "",
+          projectType: inputs.projectType,
+          evaluationId: dbEvaluationId,
+        },
+      },
+    });
   };
 
   useEffect(() => {
@@ -69,12 +93,15 @@ const Results = () => {
           projectType: data.project_type,
         });
         setInputs({
+          projectName: data.project_name || "",
           problem: data.idea_problem,
           solution: data.solution || "",
           targetUsers: data.target_user,
           differentiation: data.differentiation || "",
+          workflow: data.workflow || "",
           projectType: data.project_type,
         });
+        setDbEvaluationId(data.id);
         setLoading(false);
       };
       fetchEvaluation();
@@ -173,6 +200,13 @@ const Results = () => {
       <main className="bg-gradient-to-r from-primary/8 via-primary/3 to-background min-h-[calc(100vh-64px)]">
         <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-12">
           <div className="mx-auto max-w-3xl">
+            {/* Project Name Header */}
+            {inputs?.projectName && (
+              <div className="mb-4 text-center">
+                <h2 className="text-lg font-semibold text-foreground">{inputs.projectName}</h2>
+              </div>
+            )}
+
             {/* Verdict Card */}
             <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
               <div className="flex items-center gap-3 sm:gap-4">
@@ -183,7 +217,7 @@ const Results = () => {
                   <span className={`text-xl sm:text-2xl font-bold ${verdictConfig.color} md:text-3xl block break-words`}>
                     {verdictConfig.label}
                   </span>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-foreground/70 mt-1">
                     {projectTypeLabels[inputs?.projectType || ""] || inputs?.projectType}
                   </p>
                 </div>
@@ -204,7 +238,7 @@ const Results = () => {
                   className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-4 sm:p-5 shadow-card"
                 >
                   <h3 className="font-semibold text-foreground mb-2 sm:mb-3">{section.title}</h3>
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed break-words">
+                  <div className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed break-words">
                     {section.content}
                   </div>
                 </div>
@@ -216,7 +250,7 @@ const Results = () => {
               <summary className="p-5 cursor-pointer font-semibold text-foreground hover:text-primary transition-colors">
                 View Full Evaluation
               </summary>
-              <div className="px-5 pb-5 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed border-t border-border/30 pt-4">
+              <div className="px-5 pb-5 text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed border-t border-border/30 pt-4">
                 {evaluation!.fullEvaluation}
               </div>
             </details>
@@ -243,6 +277,15 @@ const Results = () => {
 
               <Button
                 variant="outline"
+                onClick={handleEditAndReEvaluate}
+                className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all w-full sm:w-auto"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit & Re-evaluate
+              </Button>
+
+              <Button
+                variant="outline"
                 asChild
                 className="gap-2 rounded-lg border-border/60 bg-card/80 backdrop-blur-sm px-6 hover:bg-primary/5 hover:border-primary/30 transition-all w-full sm:w-auto"
               >
@@ -258,7 +301,7 @@ const Results = () => {
               >
                 <Link to="/evaluate">
                   <RotateCcw className="h-4 w-4" />
-                  Evaluate Another Idea
+                  New Evaluation
                 </Link>
               </Button>
             </div>

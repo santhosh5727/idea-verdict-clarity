@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, XCircle, User, LogOut } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, LogOut } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import F1CarAnimation from "@/components/F1CarAnimation";
 import AmbientAnimation from "@/components/AmbientAnimation";
+import NovaAssistant from "@/components/NovaAssistant";
 import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
 
@@ -107,6 +108,9 @@ const Index = () => {
                 <a href="#how-it-works">See How It Works</a>
               </Button>
             </div>
+
+            {/* Nova AI Assistant */}
+            <NovaAssistant />
           </div>
         </div>
 

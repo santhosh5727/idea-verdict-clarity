@@ -9,6 +9,7 @@ import logo from "@/assets/logo.png";
 
 interface Evaluation {
   id: string;
+  project_name: string | null;
   idea_problem: string;
   verdict_type: string;
   created_at: string;
@@ -22,7 +23,7 @@ const Dashboard = () => {
     const fetchEvaluations = async () => {
       const { data, error } = await supabase
         .from("evaluations")
-        .select("id, idea_problem, verdict_type, created_at")
+        .select("id, project_name, idea_problem, verdict_type, created_at")
         .order("created_at", { ascending: false });
       
       if (error) {
@@ -68,6 +69,19 @@ const Dashboard = () => {
     }
   };
 
+  // Get display name: prefer project_name, fallback to truncated idea_problem
+  const getDisplayName = (evaluation: Evaluation): string => {
+    if (evaluation.project_name) {
+      return evaluation.project_name;
+    }
+    // Truncate idea_problem to ~60 chars
+    const problem = evaluation.idea_problem;
+    if (problem.length > 60) {
+      return problem.substring(0, 57) + "...";
+    }
+    return problem;
+  };
+
   return (
     <div className="min-h-screen">
       {/* Navbar */}
@@ -96,7 +110,7 @@ const Dashboard = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-foreground md:text-3xl">Your Ideas</h1>
-            <p className="mt-1 text-muted-foreground">
+            <p className="mt-1 text-foreground/70">
               Track and review all your evaluated startup ideas
             </p>
           </div>
@@ -107,7 +121,7 @@ const Dashboard = () => {
             <div className="rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Build</p>
+                  <p className="text-sm text-foreground/70">Build</p>
                   <p className="text-3xl font-bold text-foreground">{buildCount}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-primary/10">
@@ -120,7 +134,7 @@ const Dashboard = () => {
             <div className="rounded-xl border border-warning/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-warning/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Narrow</p>
+                  <p className="text-sm text-foreground/70">Narrow</p>
                   <p className="text-3xl font-bold text-foreground">{narrowCount}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-warning/10">
@@ -133,7 +147,7 @@ const Dashboard = () => {
             <div className="rounded-xl border border-destructive/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-destructive/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Kill</p>
+                  <p className="text-sm text-foreground/70">Kill</p>
                   <p className="text-3xl font-bold text-foreground">{killCount}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-destructive/10">
@@ -151,7 +165,7 @@ const Dashboard = () => {
               </div>
             ) : evaluations.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No evaluations yet.</p>
+                <p className="text-foreground/70">No evaluations yet.</p>
                 <Link to="/evaluate">
                   <Button className="mt-4">Evaluate Your First Idea</Button>
                 </Link>
@@ -171,12 +185,17 @@ const Dashboard = () => {
                     className="block group rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/30 transition-all duration-300"
                   >
                     <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      {evaluation.idea_problem}
+                      {getDisplayName(evaluation)}
                     </h3>
+                    {evaluation.project_name && (
+                      <p className="text-xs text-foreground/60 mt-1 line-clamp-1">
+                        {evaluation.idea_problem.substring(0, 80)}...
+                      </p>
+                    )}
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       {getVerdictIcon(verdict)}
                       {getVerdictLabel(verdict)}
-                      <span className="text-muted-foreground ml-2">{date}</span>
+                      <span className="text-foreground/60 ml-2">{date}</span>
                     </div>
                   </Link>
                 );

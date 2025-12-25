@@ -21,11 +21,13 @@ export type Database = {
           full_verdict_text: string
           id: string
           idea_problem: string
+          project_name: string | null
           project_type: string
           solution: string | null
           target_user: string
           user_id: string
           verdict_type: string
+          workflow: string | null
         }
         Insert: {
           created_at?: string
@@ -33,11 +35,13 @@ export type Database = {
           full_verdict_text: string
           id?: string
           idea_problem: string
+          project_name?: string | null
           project_type: string
           solution?: string | null
           target_user: string
           user_id: string
           verdict_type: string
+          workflow?: string | null
         }
         Update: {
           created_at?: string
@@ -45,11 +49,13 @@ export type Database = {
           full_verdict_text?: string
           id?: string
           idea_problem?: string
+          project_name?: string | null
           project_type?: string
           solution?: string | null
           target_user?: string
           user_id?: string
           verdict_type?: string
+          workflow?: string | null
         }
         Relationships: []
       }

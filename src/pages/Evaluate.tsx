@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Rocket, Cpu, GraduationCap, FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import StepIndicator from "@/components/StepIndicator";
 import { toast } from "sonner";
@@ -11,9 +12,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
-const steps = ["Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
+const steps = ["Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
 
 const stepContent = [
+  {
+    heading: "What's your project name?",
+    placeholder: "Enter a name for your project...",
+    subtitle: "Give your idea a memorable name",
+    isProjectName: true,
+  },
   {
     heading: "What problem are you solving?",
     placeholder: "Describe the specific pain point your solution addresses...",
@@ -71,13 +78,67 @@ const projectTypes = [
   },
 ];
 
+interface PrefilledData {
+  problem?: string;
+  solution?: string;
+  targetUsers?: string;
+  differentiation?: string;
+  workflow?: string;
+}
+
+interface EditData extends PrefilledData {
+  projectName?: string;
+  projectType?: string;
+  evaluationId?: string;
+}
+
 const Evaluate = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", ""]);
+  // answers: [projectName, problem, solution, targetUsers, differentiation, workflow]
+  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", "", ""]);
   const [selectedProjectType, setSelectedProjectType] = useState<string>("");
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
+
+  // Handle prefilled data from Nova or edit mode
+  useEffect(() => {
+    const state = location.state as { prefilled?: PrefilledData; editData?: EditData } | null;
+    
+    if (state?.prefilled) {
+      // From Nova - skip project name step, fill in the rest
+      setAnswers([
+        "", // project name - user will fill this
+        state.prefilled.problem || "",
+        state.prefilled.solution || "",
+        state.prefilled.targetUsers || "",
+        state.prefilled.differentiation || "",
+        state.prefilled.workflow || "",
+        "",
+      ]);
+      // Clear the state so refresh doesn't re-apply
+      window.history.replaceState({}, document.title);
+    } else if (state?.editData) {
+      // From Results page for re-evaluation
+      setAnswers([
+        state.editData.projectName || "",
+        state.editData.problem || "",
+        state.editData.solution || "",
+        state.editData.targetUsers || "",
+        state.editData.differentiation || "",
+        state.editData.workflow || "",
+        "",
+      ]);
+      setSelectedProjectType(state.editData.projectType || "");
+      if (state.editData.evaluationId) {
+        setEditingEvaluationId(state.editData.evaluationId);
+      }
+      // Clear the state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleBack = () => {
     if (currentStep === 0) {
@@ -105,11 +166,11 @@ const Evaluate = () => {
 
         // Normalize payload - ensure all values are properly formatted
         const payload = {
-          problem: answers[0].trim(),
-          solution: answers[1].trim() || undefined,
-          targetUsers: answers[2].trim(),
-          differentiation: answers[3].trim() || undefined,
-          workflow: answers[4].trim() || undefined,
+          problem: answers[1].trim(),
+          solution: answers[2].trim() || undefined,
+          targetUsers: answers[3].trim(),
+          differentiation: answers[4].trim() || undefined,
+          workflow: answers[5].trim() || undefined,
           projectType: selectedProjectType || "startup",
         };
 
@@ -147,10 +208,12 @@ const Evaluate = () => {
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
             user_id: user.id,
+            project_name: answers[0].trim() || null,
             idea_problem: payload.problem,
             solution: payload.solution || null,
             target_user: payload.targetUsers,
             differentiation: payload.differentiation || null,
+            workflow: payload.workflow || null,
             project_type: payload.projectType,
             verdict_type: result.verdict,
             full_verdict_text: result.fullEvaluation,
@@ -167,6 +230,7 @@ const Evaluate = () => {
           state: { 
             evaluation: result,
             inputs: {
+              projectName: answers[0].trim(),
               problem: payload.problem,
               solution: payload.solution,
               targetUsers: payload.targetUsers,
@@ -195,9 +259,10 @@ const Evaluate = () => {
   // Minimum character requirements per step
   const getMinChars = (stepIndex: number): number => {
     switch (stepIndex) {
-      case 0: return 80;  // Problem Description
-      case 2: return 20;  // Target Users
-      case 1: return 20;  // Solution (Intended Outcome)
+      case 0: return 2;   // Project Name
+      case 1: return 80;  // Problem Description
+      case 3: return 20;  // Target Users
+      case 2: return 20;  // Solution (Intended Outcome)
       default: return 0;
     }
   };
@@ -207,18 +272,22 @@ const Evaluate = () => {
 
   // Check if current step meets minimum requirements
   const isOptionalStep = stepContent[currentStep].isOptional;
+  const isProjectNameStep = stepContent[currentStep].isProjectName;
   const minChars = getMinChars(currentStep);
   const currentTrimmedLength = getTrimmedLength(answers[currentStep]);
   const meetsMinimum = currentTrimmedLength >= minChars;
 
   const canContinue = stepContent[currentStep].isProjectType 
-    ? selectedProjectType !== "" 
+    ? selectedProjectType !== ""
     : isOptionalStep || meetsMinimum;
 
   // Validation message for current step
   const getValidationMessage = (): string | null => {
     if (stepContent[currentStep].isProjectType || isOptionalStep) return null;
     if (meetsMinimum) return null;
+    if (isProjectNameStep && minChars > 0) {
+      return "Please enter a project name.";
+    }
     const remaining = minChars - currentTrimmedLength;
     return `Please add more detail (${remaining} more character${remaining !== 1 ? 's' : ''} needed).`;
   };
@@ -277,8 +346,19 @@ const Evaluate = () => {
               </p>
             )}
 
-            {/* Project Type Selection or Textarea */}
-            {stepContent[currentStep].isProjectType ? (
+            {/* Project Name Input */}
+            {stepContent[currentStep].isProjectName ? (
+              <>
+                {!stepContent[currentStep].subtitle && <div className="mb-6" />}
+                <Input
+                  placeholder={stepContent[currentStep].placeholder}
+                  value={answers[currentStep]}
+                  onChange={(e) => handleAnswerChange(e.target.value)}
+                  className="rounded-xl border-border/50 bg-card/90 backdrop-blur-sm text-lg py-6 px-4 shadow-card focus:border-primary/50 focus:ring-primary/20"
+                  maxLength={100}
+                />
+              </>
+            ) : stepContent[currentStep].isProjectType ? (
               <div className="grid gap-4 sm:grid-cols-2 mx-auto max-w-2xl">
                 {projectTypes.map((type) => {
                   const Icon = type.icon;
