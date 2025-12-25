@@ -234,15 +234,6 @@ const Results = () => {
 
             {/* Verdict Card */}
             <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
-              {/* Logo inside verdict card */}
-              <div className="flex justify-center mb-4">
-                <img 
-                  src={logo} 
-                  alt="IdeaVerdict" 
-                  className="h-10 sm:h-12 w-auto"
-                  style={{ filter: 'hue-rotate(-10deg)' }}
-                />
-              </div>
               
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className={`p-2 sm:p-3 rounded-xl ${verdictConfig.bgColor} flex-shrink-0`}>
