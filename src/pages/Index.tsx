@@ -85,14 +85,19 @@ const Index = () => {
         
         <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-20 md:py-32">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
-              Evaluate Your Startup Idea
-              <br />
-              <span className="gradient-text">Through a Profitability-First Lens</span>
-            </h1>
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <img 
+                src={logo} 
+                alt="IdeaVerdict" 
+                className="h-12 sm:h-14 md:h-16 w-auto"
+                style={{ filter: 'hue-rotate(-10deg)' }}
+              />
+              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
+                Evaluate Your Startup Idea Before You Waste Time Building
+              </h1>
+            </div>
             <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto px-2">
-              IdeaVerdict evaluates startup ideas with a bootstrap-oriented, execution-focused lens. 
-              Built to help founders build sustainable businesses — not pitch decks or hype-driven moonshots.
+              Get honest feedback in minutes. IdeaVerdict tells you if your idea is worth building — or if you should move on.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 sm:flex-row px-4 sm:px-0">
               <Link to="/evaluate" className="w-full sm:w-auto">
@@ -233,9 +238,6 @@ const Index = () => {
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
             Built for founders who value survival over hype.
-          </p>
-          <p className="text-xs text-muted-foreground/60 mt-2">
-            Profitability-first. Bootstrap-oriented. Honest by design.
           </p>
         </div>
       </footer>
