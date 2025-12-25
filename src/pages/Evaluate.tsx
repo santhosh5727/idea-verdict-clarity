@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Loader2, Lightbulb } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Rocket, Code, Cpu, GraduationCap, Beaker } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,36 @@ import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
 const PROJECT_TYPES = [
-  { id: "startup", label: "Startup / Business Idea" },
-  { id: "micro-saas", label: "Micro-SaaS / Indie Project" },
-  { id: "hardware", label: "Hardware / Engineering Project" },
-  { id: "academic", label: "Academic / College Project" },
-  { id: "personal", label: "Personal / Learning Experiment" },
+  { 
+    id: "startup", 
+    label: "Startup / Business Idea",
+    description: "A product or service intended to generate revenue and scale.",
+    icon: Rocket,
+  },
+  { 
+    id: "saas", 
+    label: "SaaS / Tool",
+    description: "A software-based tool, platform, or AI product solving a specific problem.",
+    icon: Code,
+  },
+  { 
+    id: "hardware", 
+    label: "Hardware Project",
+    description: "Physical devices, IoT, electronics, robotics, or hardware prototypes.",
+    icon: Cpu,
+  },
+  { 
+    id: "academic", 
+    label: "Academic / School Project",
+    description: "College projects, final-year projects, research ideas, or assignments.",
+    icon: GraduationCap,
+  },
+  { 
+    id: "personal", 
+    label: "Personal Experiment",
+    description: "Side projects, learning builds, prototypes, or technical experiments.",
+    icon: Beaker,
+  },
 ] as const;
 
 const steps = ["Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
@@ -52,8 +77,9 @@ const stepContent = [
     isOptional: true,
   },
   {
-    heading: "What are you evaluating?",
+    heading: "Project Type",
     placeholder: "",
+    subtitle: "Not all ideas are startups. We evaluate based on what you are actually building.",
     isProjectType: true,
   },
 ];
@@ -356,18 +382,9 @@ const Evaluate = () => {
             </p>
 
             {/* Heading */}
-            {isProjectTypeStep ? (
-              <div className="flex items-center gap-2 mb-2">
-                <Lightbulb className="h-6 w-6 sm:h-7 sm:w-7 text-primary flex-shrink-0" />
-                <h1 className="text-2xl font-bold text-foreground md:text-3xl">
-                  {stepContent[currentStep].heading}
-                </h1>
-              </div>
-            ) : (
-              <h1 className="mb-2 text-2xl font-bold text-foreground md:text-3xl">
-                {stepContent[currentStep].heading}
-              </h1>
-            )}
+            <h1 className="mb-2 text-2xl font-bold text-foreground md:text-3xl">
+              {stepContent[currentStep].heading}
+            </h1>
 
             {/* Subtitle */}
             {stepContent[currentStep]?.subtitle && (
@@ -378,21 +395,51 @@ const Evaluate = () => {
 
             {/* Input Fields */}
             {isProjectTypeStep ? (
-              <div className="grid gap-3 mt-6">
-                {PROJECT_TYPES.map((type) => (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => handleAnswerChange(type.id)}
-                    className={`w-full p-4 rounded-xl border text-left transition-all ${
-                      answers[currentStep] === type.id
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border/50 bg-card/90 text-foreground/80 hover:border-primary/50 hover:bg-primary/5"
-                    }`}
-                  >
-                    <span className="font-medium">{type.label}</span>
-                  </button>
-                ))}
+              <div className="grid gap-4 mt-6 sm:grid-cols-2">
+                {PROJECT_TYPES.map((type) => {
+                  const IconComponent = type.icon;
+                  const isSelected = answers[currentStep] === type.id;
+                  return (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => handleAnswerChange(type.id)}
+                      className={`relative flex items-start gap-4 p-5 rounded-2xl border-2 text-left transition-all shadow-sm hover:shadow-md ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-md"
+                          : "border-border/60 bg-card hover:border-primary/40 hover:bg-card/80"
+                      }`}
+                    >
+                      {/* Radio indicator */}
+                      <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary"
+                          : "border-muted-foreground/40"
+                      }`}>
+                        {isSelected && (
+                          <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                        )}
+                      </div>
+                      
+                      {/* Icon */}
+                      <div className={`p-2.5 rounded-xl flex-shrink-0 ${
+                        isSelected ? "bg-primary/10" : "bg-muted/50"
+                      }`}>
+                        <IconComponent className={`h-5 w-5 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                      </div>
+                      
+                      {/* Content */}
+                      <div className="flex-1 pr-6">
+                        <span className={`font-semibold block ${isSelected ? "text-foreground" : "text-foreground/90"}`}>
+                          {type.label}
+                        </span>
+                        <span className="text-sm text-muted-foreground mt-1 block leading-relaxed">
+                          {type.description}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : isProjectNameStep ? (
               <>
