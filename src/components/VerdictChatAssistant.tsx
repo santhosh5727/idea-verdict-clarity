@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, MessageCircle, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,33 @@ interface Message {
   content: string;
 }
 
+type VerdictCategory = "build" | "narrow" | "kill";
+
+const getVerdictCategory = (verdict: string): VerdictCategory => {
+  const v = verdict.toLowerCase();
+  if (v.includes("build") && !v.includes("not") && !v.includes("don")) return "build";
+  if (v.includes("narrow") || v.includes("pivot")) return "narrow";
+  return "kill";
+};
+
+const CONVERSATION_STARTERS: Record<VerdictCategory, string[]> = {
+  kill: [
+    "What's the main reason this got a low score?",
+    "Is there anything salvageable here?",
+    "What did I miss in my evaluation?",
+  ],
+  narrow: [
+    "What's the biggest weakness?",
+    "How can I improve this specific aspect?",
+    "What would push this to BUILD?",
+  ],
+  build: [
+    "What's my biggest risk?",
+    "What should I focus on first?",
+    "Are there any red flags I should watch?",
+  ],
+};
+
 const VerdictChatAssistant = ({
   verdict,
   fullEvaluation,
@@ -26,7 +53,11 @@ const VerdictChatAssistant = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hasGreeted, setHasGreeted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const verdictCategory = getVerdictCategory(verdict);
+  const conversationStarters = CONVERSATION_STARTERS[verdictCategory];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,13 +67,71 @@ const VerdictChatAssistant = ({
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = async () => {
-    const userMessage = input.trim();
+  // Send first greeting message when chat opens
+  const sendGreeting = useCallback(async () => {
+    if (hasGreeted || !fullEvaluation) return;
     
-    // Validate message length
+    setLoading(true);
+    setHasGreeted(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("verdict-assistant", {
+        body: {
+          message: "",
+          verdict_text: fullEvaluation,
+          verdict_type: verdict,
+          idea_problem: ideaProblem,
+          conversationHistory: [],
+          isFirstMessage: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.response) {
+        setMessages([{ role: "assistant", content: data.response }]);
+      }
+    } catch (error) {
+      logError("Greeting error:", error);
+      // Fallback greeting if API fails
+      const score = parseScore(fullEvaluation);
+      const verdictLabel = verdictCategory === "build" ? "BUILD" : 
+                          verdictCategory === "narrow" ? "NARROW" : "DO NOT BUILD";
+      setMessages([{
+        role: "assistant",
+        content: `Hey! I just evaluated your idea and gave it a ${score}% with a '${verdictLabel}' verdict. Want to talk through any part of the evaluation? I can explain the reasoning or answer questions about specific areas.`
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [hasGreeted, fullEvaluation, verdict, ideaProblem, verdictCategory]);
+
+  // Parse score from evaluation text
+  const parseScore = (text: string): string => {
+    const patterns = [
+      /idea\s*strength[:\s]*(\d+)%/i,
+      /score[:\s]*(\d+)%/i,
+      /(\d+)%\s*(?:idea\s*)?strength/i,
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) return match[1];
+    }
+    return "N/A";
+  };
+
+  // Trigger greeting when chat opens
+  useEffect(() => {
+    if (isOpen && !hasGreeted && messages.length === 0) {
+      sendGreeting();
+    }
+  }, [isOpen, hasGreeted, messages.length, sendGreeting]);
+
+  const sendMessage = async (messageText?: string) => {
+    const userMessage = (messageText || input).trim();
+    
     if (userMessage.length < 3 || loading) return;
 
-    // Validate verdict context exists
     if (!fullEvaluation) {
       setMessages((prev) => [
         ...prev,
@@ -63,13 +152,13 @@ const VerdictChatAssistant = ({
           message: userMessage,
           verdict_text: fullEvaluation,
           verdict_type: verdict,
+          idea_problem: ideaProblem,
           conversationHistory: messages,
+          isFirstMessage: false,
         },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data.error) {
         setMessages((prev) => [
@@ -100,6 +189,11 @@ const VerdictChatAssistant = ({
     }
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion);
+    sendMessage(suggestion);
+  };
+
   return (
     <>
       {/* Chat Toggle Button */}
@@ -123,22 +217,13 @@ const VerdictChatAssistant = ({
             <div>
               <h3 className="font-semibold text-foreground">Verdict Assistant</h3>
               <p className="text-xs text-muted-foreground">
-                Ask questions about your verdict
+                Let's discuss your evaluation
               </p>
             </div>
           </div>
 
           {/* Messages */}
           <div className="h-72 overflow-y-auto p-4 space-y-3">
-            {messages.length === 0 && (
-              <div className="text-center text-sm text-muted-foreground py-8">
-                <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p>Ask me anything about your verdict.</p>
-                <p className="text-xs mt-1 opacity-70">
-                  I can explain the reasoning, clarify concepts, or discuss patterns.
-                </p>
-              </div>
-            )}
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -156,14 +241,33 @@ const VerdictChatAssistant = ({
               </div>
             ))}
             {loading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-3 py-2">
+              <div className="flex justify-start items-center gap-2">
+                <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Typing...</span>
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Conversation Starters */}
+          {messages.length > 0 && messages.length <= 2 && !loading && (
+            <div className="px-4 pb-2">
+              <p className="text-xs text-muted-foreground mb-2">Suggested questions:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {conversationStarters.map((starter, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSuggestionClick(starter)}
+                    className="text-xs px-2.5 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20"
+                  >
+                    {starter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="border-t border-border/40 p-3">
@@ -179,7 +283,7 @@ const VerdictChatAssistant = ({
               />
               <Button
                 size="icon"
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={!input.trim() || loading}
                 className="shrink-0"
               >
