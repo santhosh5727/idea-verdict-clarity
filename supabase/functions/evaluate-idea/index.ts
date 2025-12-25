@@ -2,8 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-// Input validation schema - no user-selected modes, everything is inferred
+// Input validation schema - projectType is context only, everything else is evaluated
 const evaluateSchema = z.object({
+  projectType: z.string().max(100).optional(),
   problem: z.string().min(1).max(15000),
   solution: z.string().max(15000).optional().default(""),
   targetUsers: z.string().min(1).max(15000),
@@ -276,6 +277,12 @@ COMPETITIVE LANDSCAPE:
 - Use cautious phrasing if uncertain ("examples include", "companies like")
 - Do NOT invent fake startups
 
+WHAT NEEDS TO CHANGE FOR THIS TO WORK:
+(REQUIRED for ALL verdicts. Be concrete and actionable. No motivation. No encouragement.)
+- For DO NOT BUILD: What fundamental changes would make this viable?
+- For BUILD ONLY IF NARROWED: What specific scope/approach changes are needed?
+- For BUILD: What execution risks must be actively managed?
+
 HARSH TRUTH:
 (One sentence the founder doesn't want to hear but needs to)
 
@@ -355,14 +362,27 @@ serve(async (req) => {
       );
     }
 
-    const { problem, solution, targetUsers, differentiation, workflow } = parseResult.data;
+    const { projectType, problem, solution, targetUsers, differentiation, workflow } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    let userPrompt = `Evaluate this idea:
+    let userPrompt = `Evaluate this idea:`;
+
+    // Include project type as context only (does NOT change scoring or thresholds)
+    if (projectType) {
+      userPrompt += `
+
+USER-DECLARED PROJECT TYPE (context only, does NOT change evaluation criteria):
+${projectType}
+
+Note: This is what the user believes they are building. Use this to understand their intent and expectations, 
+but apply the same evaluation standards regardless. Do NOT soften or adjust thresholds based on this.`;
+    }
+
+    userPrompt += `
 
 PROBLEM:
 ${problem}
@@ -391,6 +411,7 @@ First:
 3. Apply mode-specific evaluation criteria
 4. Provide your verdict following the exact output format
 
+IMPORTANT: You MUST include the "WHAT NEEDS TO CHANGE FOR THIS TO WORK" section for ALL verdicts.
 Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score, AND Execution Difficulty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
