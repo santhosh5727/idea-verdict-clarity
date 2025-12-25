@@ -130,6 +130,39 @@ const Evaluate = () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep((prev) => prev + 1);
     } else {
+      // Validate all required fields before submission
+      const projectName = answers[0].trim();
+      const problem = answers[1].trim();
+      const solution = answers[2].trim();
+      const targetUsers = answers[3].trim();
+      const projectType = answers[6];
+
+      // Check required fields
+      if (projectName.length < 2) {
+        toast.error("Please enter a project name.");
+        setCurrentStep(0);
+        return;
+      }
+      if (problem.length < 80) {
+        toast.error("Please provide a more detailed problem description (at least 80 characters).");
+        setCurrentStep(1);
+        return;
+      }
+      if (solution.length < 20) {
+        toast.error("Please provide a solution description (at least 20 characters).");
+        setCurrentStep(2);
+        return;
+      }
+      if (targetUsers.length < 20) {
+        toast.error("Please describe your target users (at least 20 characters).");
+        setCurrentStep(3);
+        return;
+      }
+      if (!projectType) {
+        toast.error("Please select a project type.");
+        return;
+      }
+
       // Submit evaluation to AI
       setIsEvaluating(true);
       try {
@@ -143,15 +176,15 @@ const Evaluate = () => {
         }
 
         // Get project type label from selected id (now at index 6)
-        const selectedProjectType = PROJECT_TYPES.find(pt => pt.id === answers[6])?.label || answers[6];
+        const selectedProjectType = PROJECT_TYPES.find(pt => pt.id === projectType)?.label || projectType;
 
         // Normalize payload - AI will infer both category and execution mode
         // projectType is passed as context only
         const payload = {
           projectType: selectedProjectType,
-          problem: answers[1].trim(),
-          solution: answers[2].trim() || undefined,
-          targetUsers: answers[3].trim(),
+          problem: problem,
+          solution: solution || undefined,
+          targetUsers: targetUsers,
           differentiation: answers[4].trim() || undefined,
           workflow: answers[5].trim() || undefined,
         };
