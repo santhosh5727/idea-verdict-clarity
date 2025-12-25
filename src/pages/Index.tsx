@@ -86,13 +86,12 @@ const Index = () => {
         <div className="container mx-auto px-4 sm:px-6 py-12 sm:py-20 md:py-32">
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="mb-6 text-3xl font-bold tracking-tight text-foreground sm:text-4xl md:text-5xl lg:text-6xl">
-              Know if your startup idea
+              Evaluate Your Startup Idea
               <br />
-              <span className="gradient-text">deserves to exist.</span>
+              <span className="gradient-text">Before You Waste Time Building</span>
             </h1>
             <p className="mb-8 sm:mb-10 text-base sm:text-lg text-muted-foreground md:text-xl max-w-2xl mx-auto px-2">
-              An opinionated decision engine that evaluates your idea with clarity
-              and honesty. No fluff, just a clear verdict: Build, Narrow, or Kill.
+              Get honest feedback in minutes. IdeaVerdict tells you if your idea is worth building — or if you should move on.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 sm:flex-row px-4 sm:px-0">
               <Link to="/evaluate" className="w-full sm:w-auto">
@@ -113,6 +112,33 @@ const Index = () => {
             <NovaAssistant />
           </div>
         </div>
+
+        {/* Benefits Section */}
+        <section className="relative container mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-xl sm:text-2xl font-semibold text-center text-foreground mb-8">
+              What We Evaluate
+            </h2>
+            <ul className="grid gap-4 sm:grid-cols-2 max-w-2xl mx-auto">
+              <li className="flex items-center gap-3 p-4 rounded-lg bg-card/60 backdrop-blur-sm border border-border/40">
+                <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-foreground/90">Problem clarity check</span>
+              </li>
+              <li className="flex items-center gap-3 p-4 rounded-lg bg-card/60 backdrop-blur-sm border border-border/40">
+                <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-foreground/90">Target user validation</span>
+              </li>
+              <li className="flex items-center gap-3 p-4 rounded-lg bg-card/60 backdrop-blur-sm border border-border/40">
+                <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-foreground/90">Competitive analysis</span>
+              </li>
+              <li className="flex items-center gap-3 p-4 rounded-lg bg-card/60 backdrop-blur-sm border border-border/40">
+                <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-foreground/90">Monetization review</span>
+              </li>
+            </ul>
+          </div>
+        </section>
 
         {/* Verdict Cards Section with Ambient Animation */}
         <section id="how-it-works" className="relative container mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
@@ -156,6 +182,46 @@ const Index = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Critical flaws in market, uniqueness, or execution feasibility.
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="relative container mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-xl sm:text-2xl font-semibold text-center text-foreground mb-8">
+              Frequently Asked Questions
+            </h2>
+            <div className="space-y-4">
+              <details className="group rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 sm:p-6">
+                <summary className="flex cursor-pointer items-center justify-between font-medium text-foreground">
+                  <span>How do I know if my startup idea is good?</span>
+                  <span className="ml-4 flex-shrink-0 text-muted-foreground group-open:rotate-180 transition-transform">↓</span>
+                </summary>
+                <p className="mt-4 text-muted-foreground leading-relaxed">
+                  A good startup idea solves a real problem for a specific audience, has a clear path to monetization, and offers something competitors don't. IdeaVerdict analyzes these factors and gives you an honest verdict — Build, Narrow, or Kill — so you know where you stand before investing time and money.
+                </p>
+              </details>
+              
+              <details className="group rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 sm:p-6">
+                <summary className="flex cursor-pointer items-center justify-between font-medium text-foreground">
+                  <span>Should I build my startup idea or drop it?</span>
+                  <span className="ml-4 flex-shrink-0 text-muted-foreground group-open:rotate-180 transition-transform">↓</span>
+                </summary>
+                <p className="mt-4 text-muted-foreground leading-relaxed">
+                  That depends on problem-solution fit, target market clarity, and competitive differentiation. Instead of guessing, use IdeaVerdict to get structured AI feedback. You'll receive a clear recommendation with reasoning — helping you decide whether to move forward, refine your approach, or pivot to a better idea.
+                </p>
+              </details>
+              
+              <details className="group rounded-xl border border-border/40 bg-card/60 backdrop-blur-sm p-4 sm:p-6">
+                <summary className="flex cursor-pointer items-center justify-between font-medium text-foreground">
+                  <span>How to validate a business idea quickly?</span>
+                  <span className="ml-4 flex-shrink-0 text-muted-foreground group-open:rotate-180 transition-transform">↓</span>
+                </summary>
+                <p className="mt-4 text-muted-foreground leading-relaxed">
+                  Traditional validation takes weeks of customer interviews and market research. IdeaVerdict speeds this up by evaluating your problem statement, solution, target users, and differentiation in minutes. It's not a replacement for real customer feedback, but it's the fastest way to stress-test your idea before you build anything.
+                </p>
+              </details>
             </div>
           </div>
         </section>
