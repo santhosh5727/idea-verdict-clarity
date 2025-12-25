@@ -20,14 +20,9 @@ const PROJECT_TYPES = [
   { id: "personal", label: "Personal / Learning Experiment" },
 ] as const;
 
-const steps = ["Project Type", "Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow"];
+const steps = ["Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
 
 const stepContent = [
-  {
-    heading: "What are you evaluating?",
-    placeholder: "",
-    isProjectType: true,
-  },
   {
     heading: "What's your project name?",
     placeholder: "Enter a name for your project...",
@@ -56,6 +51,11 @@ const stepContent = [
     subtitle: "This optional field helps validate execution realism. Simple, realistic workflows are preferred.",
     isOptional: true,
   },
+  {
+    heading: "What are you evaluating?",
+    placeholder: "",
+    isProjectType: true,
+  },
 ];
 
 interface PrefilledData {
@@ -77,7 +77,7 @@ const Evaluate = () => {
   const location = useLocation();
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  // answers: [projectType, projectName, problem, solution, targetUsers, differentiation, workflow]
+  // answers: [projectName, problem, solution, targetUsers, differentiation, workflow, projectType]
   const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", "", ""]);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
@@ -89,26 +89,26 @@ const Evaluate = () => {
     if (state?.prefilled) {
       // From Nova - fill in the rest
       setAnswers([
-        state.prefilled.projectType || "", // project type
         "", // project name - user will fill this
         state.prefilled.problem || "",
         state.prefilled.solution || "",
         state.prefilled.targetUsers || "",
         state.prefilled.differentiation || "",
         state.prefilled.workflow || "",
+        state.prefilled.projectType || "", // project type at end
       ]);
       // Clear the state so refresh doesn't re-apply
       window.history.replaceState({}, document.title);
     } else if (state?.editData) {
       // From Results page for re-evaluation
       setAnswers([
-        state.editData.projectType || "",
         state.editData.projectName || "",
         state.editData.problem || "",
         state.editData.solution || "",
         state.editData.targetUsers || "",
         state.editData.differentiation || "",
         state.editData.workflow || "",
+        state.editData.projectType || "", // project type at end
       ]);
       if (state.editData.evaluationId) {
         setEditingEvaluationId(state.editData.evaluationId);
@@ -142,18 +142,18 @@ const Evaluate = () => {
           return;
         }
 
-        // Get project type label from selected id
-        const selectedProjectType = PROJECT_TYPES.find(pt => pt.id === answers[0])?.label || answers[0];
+        // Get project type label from selected id (now at index 6)
+        const selectedProjectType = PROJECT_TYPES.find(pt => pt.id === answers[6])?.label || answers[6];
 
         // Normalize payload - AI will infer both category and execution mode
         // projectType is passed as context only
         const payload = {
           projectType: selectedProjectType,
-          problem: answers[2].trim(),
-          solution: answers[3].trim() || undefined,
-          targetUsers: answers[4].trim(),
-          differentiation: answers[5].trim() || undefined,
-          workflow: answers[6].trim() || undefined,
+          problem: answers[1].trim(),
+          solution: answers[2].trim() || undefined,
+          targetUsers: answers[3].trim(),
+          differentiation: answers[4].trim() || undefined,
+          workflow: answers[5].trim() || undefined,
         };
 
         const response = await fetch(
@@ -190,7 +190,7 @@ const Evaluate = () => {
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
             user_id: user.id,
-            project_name: answers[1].trim() || null,
+            project_name: answers[0].trim() || null,
             idea_problem: payload.problem,
             solution: payload.solution || null,
             target_user: payload.targetUsers,
@@ -214,7 +214,7 @@ const Evaluate = () => {
             evaluation: result,
             inputs: {
               projectType: selectedProjectType,
-              projectName: answers[1].trim(),
+              projectName: answers[0].trim(),
               problem: payload.problem,
               solution: payload.solution,
               targetUsers: payload.targetUsers,
@@ -244,11 +244,11 @@ const Evaluate = () => {
   // Minimum character requirements per step
   const getMinChars = (stepIndex: number): number => {
     switch (stepIndex) {
-      case 0: return 0;   // Project Type (selection-based)
-      case 1: return 2;   // Project Name
-      case 2: return 80;  // Problem Description
-      case 3: return 20;  // Solution
-      case 4: return 20;  // Target Users
+      case 0: return 2;   // Project Name
+      case 1: return 80;  // Problem Description
+      case 2: return 20;  // Solution
+      case 3: return 20;  // Target Users
+      case 6: return 0;   // Project Type (selection-based)
       default: return 0;
     }
   };
@@ -317,8 +317,8 @@ const Evaluate = () => {
       <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">
         <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16">
           <div className="mx-auto max-w-3xl">
-            {/* Positioning Copy - show on second step (after project type) */}
-            {currentStep === 1 && (
+            {/* Positioning Copy - show on first step (project name) */}
+            {currentStep === 0 && (
               <div className="mb-6 p-4 rounded-lg border border-border/50 bg-muted/30">
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   <strong className="text-foreground">Note:</strong> This engine is optimized to prevent wasted effort on low-leverage ideas. 

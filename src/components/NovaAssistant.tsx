@@ -16,7 +16,7 @@ interface StructuredIdea {
 
 const NovaAssistant = () => {
   const navigate = useNavigate();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [rawIdea, setRawIdea] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [structuredIdea, setStructuredIdea] = useState<StructuredIdea | null>(null);
