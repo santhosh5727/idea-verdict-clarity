@@ -2,14 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-// Input validation schema - projectType is now removed as it's inferred
+// Input validation schema - no user-selected modes, everything is inferred
 const evaluateSchema = z.object({
   problem: z.string().min(1).max(15000),
   solution: z.string().max(15000).optional().default(""),
   targetUsers: z.string().min(1).max(15000),
   differentiation: z.string().max(15000).optional().default(""),
   workflow: z.string().max(20000).optional(),
-  evaluationMode: z.enum(["indie", "venture", "academic"]).optional().default("indie"),
 });
 
 // Fixed category set for classification
@@ -21,19 +20,21 @@ const IDEA_CATEGORIES = [
   "Service / Other",
 ] as const;
 
+// Execution modes for internal evaluation adjustment
+const EXECUTION_MODES = [
+  "Indie / Micro-SaaS",
+  "Venture / Hard Tech",
+] as const;
+
 // CORS headers with origin validation
 const getAllowedOrigins = () => {
   return [
-    // Production domain
     "https://ideaverdict.in",
     "https://www.ideaverdict.in",
-    // Lovable preview domains
     "https://lovable.dev",
     "https://ideaverdictin.lovable.app",
-    // Wildcard patterns for Lovable
     "https://*.lovable.app",
     "https://*.lovableproject.com",
-    // Development
     "http://localhost:5173",
     "http://localhost:3000",
   ];
@@ -45,7 +46,6 @@ const getCorsHeaders = (req: Request) => {
   
   console.log("Request origin:", origin);
   
-  // Check if origin matches any allowed pattern
   const isAllowed = allowedOrigins.some(allowed => {
     if (allowed.includes("*")) {
       const pattern = allowed.replace("*", ".*");
@@ -63,73 +63,10 @@ const getCorsHeaders = (req: Request) => {
   };
 };
 
-const getCategoryRiskContext = (category: string) => {
-  const riskContexts: Record<string, string> = {
-    "SaaS / Tool": `
-CATEGORY-SPECIFIC RISKS FOR SAAS/TOOL:
-- Churn risk: How sticky is the solution? Can users easily switch?
-- Feature commoditization: Can competitors copy core features quickly?
-- Pricing pressure: Is there a race to the bottom in this space?`,
-    "Marketplace": `
-CATEGORY-SPECIFIC RISKS FOR MARKETPLACE:
-- Chicken-and-egg problem: How will you bootstrap supply and demand simultaneously?
-- Liquidity risk: Can you achieve enough transactions to be useful?
-- Disintermediation: Will users bypass the platform once connected?
-- Trust & safety costs: What moderation/verification is needed?`,
-    "AI Product": `
-CATEGORY-SPECIFIC RISKS FOR AI PRODUCT:
-- Data dependency: Where does training/inference data come from?
-- Model commoditization: Can competitors use the same base models?
-- Accuracy requirements: What's the cost of errors in this domain?
-- API dependency: Are you building on rented land (OpenAI, etc.)?`,
-    "Content / Community": `
-CATEGORY-SPECIFIC RISKS FOR CONTENT/COMMUNITY:
-- Cold start problem: How do you get the first engaged users?
-- Moderation burden: What content policies and enforcement are needed?
-- Monetization challenge: Can you monetize without killing the community?
-- Network effects: Is there genuine lock-in or can users leave easily?`,
-    "Service / Other": `
-CATEGORY-SPECIFIC RISKS FOR SERVICE/OTHER:
-- Scalability limits: How do you grow beyond your own time?
-- Productization path: Can this become a product or is it forever a service?
-- Margin compression: What prevents clients from pushing fees down?`,
-  };
-  return riskContexts[category] || "";
-};
-
-const getSystemPrompt = (evaluationMode: string) => {
-  const modeContext = {
-    indie: `
-MODE: INDIE / MICRO-SAAS
-This mode is optimized for solo founders and small teams building bootstrapped products.
-Evaluation priorities:
-- Can one person or small team ship this?
-- Is there a clear path to $10K-$100K MRR?
-- Does it require venture funding to succeed? (If yes, penalize)
-- Can it be profitable without massive scale?`,
-    venture: `
-MODE: VENTURE / INFRA / HARD TECH
-This mode accounts for high-difficulty, high-capital ideas where execution risk is accepted.
-Evaluation priorities:
-- Is the market large enough to justify venture funding?
-- Is technical difficulty creating a real moat?
-- Does complexity serve a purpose or is it self-imposed?
-- Allow high difficulty scores but do NOT inflate viability just because it's "hard tech"`,
-    academic: `
-MODE: ACADEMIC / LEARNING PROJECT
-This mode judges learning value and technical growth, NOT monetization.
-Evaluation priorities:
-- Does this teach valuable skills?
-- Is the scope appropriate for learning?
-- Will completing this build portfolio-worthy work?
-- Ignore market viability, focus on educational merit`
-  };
-
+const getSystemPrompt = () => {
   return `You are Idea Verdict, an intentionally harsh startup evaluator.
 Your job is to stress-test ideas like a skeptical investor who has seen 10,000 pitches and funded 5.
 ASSUME EVERY IDEA IS WEAK unless it proves otherwise with clear, undeniable evidence.
-
-${modeContext[evaluationMode as keyof typeof modeContext] || modeContext.indie}
 
 ────────────────────────
 SYSTEM POSITIONING (User will see this)
@@ -138,7 +75,7 @@ SYSTEM POSITIONING (User will see this)
 This engine is optimized to prevent wasted effort on low-leverage ideas.
 It is intentionally conservative and biased against high-risk execution.
 A low score does NOT mean the idea is bad.
-It means the execution risk is high under the selected mode.
+It means the execution risk is high given the idea's nature.
 
 ────────────────────────
 YOUR MINDSET
@@ -161,15 +98,64 @@ First, classify the idea into ONE of these categories based on its description:
 - **Content / Community** - Media, content platforms, community-driven products
 - **Service / Other** - Services, consulting, hardware, or ideas that don't fit above
 
-If the idea doesn't clearly fit a category, classify it as "Service / Other" rather than guessing.
-
-Output the category at the start of your evaluation:
-DETECTED CATEGORY: [Category Name]
-
-After classifying, apply category-specific risk checks (these are INTERNAL context, not separate output sections).
+If the idea doesn't clearly fit a category, classify it as "Service / Other".
 
 ────────────────────────
-STEP 2: HARD NEGATIVE GATES (Check First!)
+STEP 2: INFER EXECUTION MODE
+────────────────────────
+
+Based on the idea's characteristics, infer the appropriate execution mode:
+
+**Indie / Micro-SaaS** - Use this mode when:
+- Idea can be built by a solo founder or small team (1-3 people)
+- Low capital requirements (< $50K to launch)
+- Quick time-to-market (weeks to months)
+- Targets SMBs, prosumers, or niche markets
+- Revenue model is clear and direct (subscriptions, one-time purchases)
+- No regulatory hurdles or complex compliance
+- Uses existing, proven technology stack
+
+**Venture / Hard Tech** - Use this mode when:
+- Requires significant capital investment (> $100K)
+- Long development timeline (years)
+- Targets enterprise or large markets
+- Involves deep technology, R&D, or research
+- Requires regulatory approval or compliance
+- Needs specialized talent or infrastructure
+- Platform or network effects are core to the model
+- Hardware, biotech, fintech with licensing, or complex infrastructure
+
+SIGNALS TO DETECT:
+- Capital intensity: mentions of funding, infrastructure, hardware, research, patents
+- Time-to-market: complexity of solution, regulatory requirements, tech development
+- Target customers: enterprise vs SMB vs consumer
+- Team requirements: solo-able vs team-dependent
+- Technology: proven stack vs cutting-edge/unproven
+
+Output:
+DETECTED EXECUTION MODE: [Indie / Micro-SaaS | Venture / Hard Tech]
+(Brief justification: what signals led to this classification)
+
+────────────────────────
+STEP 3: APPLY MODE-SPECIFIC EVALUATION
+────────────────────────
+
+**For Indie / Micro-SaaS:**
+- Conservative risk tolerance
+- Solo/small-team execution bias
+- Speed and distribution weighted higher
+- Path to $10K-$100K MRR must be clear
+- Penalize ideas that require venture funding to succeed
+
+**For Venture / Hard Tech:**
+- Higher risk tolerance for execution complexity
+- Longer timelines are acceptable
+- Market size and moat weighted higher
+- Technical difficulty can be a feature (creates barriers)
+- Still require clear path to value, just over longer horizon
+
+────────────────────────
+STEP 4: HARD NEGATIVE GATES (Check First!)
 ────────────────────────
 
 Before scoring, check these DISQUALIFYING conditions. If ANY apply, the idea CANNOT score above 60:
@@ -196,23 +182,27 @@ Before scoring, check these DISQUALIFYING conditions. If ANY apply, the idea CAN
    → CAP AT 50.
 
 ────────────────────────
-STEP 3: SCORING (TWO SEPARATE AXES)
+STEP 5: SCORING (TWO SEPARATE AXES)
 ────────────────────────
 
 You MUST provide TWO separate signals. Do NOT collapse them.
 
 **AXIS 1: VIABILITY SCORE (0–100)**
-Definition: "Probability that this idea can succeed in principle, given the evaluation mode."
+Definition: "Probability that this idea can succeed in principle, given the detected execution mode."
 
-For Startups (Indie mode):
+For Indie / Micro-SaaS:
 1. Problem Severity (0–25): How painful and urgent?
 2. Solution Quality (0–25): How much better than alternatives?
 3. Market Reality (0–20): Proven willingness to pay?
 4. Differentiation (0–15): Defensible moat?
-5. Execution Feasibility (0–15): Can be shipped with current resources?
+5. Execution Feasibility (0–15): Can be shipped with limited resources?
 
-For Venture mode: Allow higher complexity but require proportional market size.
-For Academic mode: Score learning value, skill development, and project completion feasibility.
+For Venture / Hard Tech:
+1. Problem Severity (0–20): How painful and urgent at scale?
+2. Solution Quality (0–20): How much better than alternatives?
+3. Market Size (0–25): Is the TAM worth the risk?
+4. Moat Depth (0–20): How defensible is this long-term?
+5. Execution Path (0–15): Is there a credible path to build this?
 
 **AXIS 2: EXECUTION DIFFICULTY**
 One of: LOW | MEDIUM | EXTREME
@@ -251,6 +241,9 @@ OUTPUT FORMAT
 ────────────────────────
 
 DETECTED CATEGORY: [SaaS / Tool | Marketplace | AI Product | Content / Community | Service / Other]
+
+DETECTED EXECUTION MODE: [Indie / Micro-SaaS | Venture / Hard Tech]
+(Brief justification for mode selection)
 
 VERDICT: [Will be overridden by score-based logic]
 
@@ -342,22 +335,14 @@ serve(async (req) => {
       );
     }
 
-    const { problem, solution, targetUsers, differentiation, workflow, evaluationMode } = parseResult.data;
+    const { problem, solution, targetUsers, differentiation, workflow } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const modeLabels: Record<string, string> = {
-      indie: "Indie / Micro-SaaS",
-      venture: "Venture / Infra / Hard Tech",
-      academic: "Academic / Learning Project"
-    };
-
     let userPrompt = `Evaluate this idea:
-
-EVALUATION MODE: ${modeLabels[evaluationMode] || "Indie / Micro-SaaS"}
 
 PROBLEM:
 ${problem}
@@ -380,7 +365,13 @@ ${workflow}`;
 
     userPrompt += `
 
-First classify the idea into one of the categories, then provide your verdict following the exact output format. Remember to include BOTH Viability Score AND Execution Difficulty.`;
+First:
+1. Classify the idea category
+2. Infer the appropriate execution mode based on the idea's characteristics
+3. Apply mode-specific evaluation criteria
+4. Provide your verdict following the exact output format
+
+Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score, AND Execution Difficulty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -391,7 +382,7 @@ First classify the idea into one of the categories, then provide your verdict fo
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: getSystemPrompt(evaluationMode) },
+          { role: "system", content: getSystemPrompt() },
           { role: "user", content: userPrompt },
         ],
       }),
@@ -427,7 +418,6 @@ First classify the idea into one of the categories, then provide your verdict fo
     let inferredCategory = "Service / Other";
     if (categoryMatch) {
       const detectedCat = categoryMatch[1].trim();
-      // Normalize to one of our fixed categories
       if (detectedCat.toLowerCase().includes("saas") || detectedCat.toLowerCase().includes("tool")) {
         inferredCategory = "SaaS / Tool";
       } else if (detectedCat.toLowerCase().includes("marketplace")) {
@@ -442,7 +432,20 @@ First classify the idea into one of the categories, then provide your verdict fo
     }
     console.log("Inferred category:", inferredCategory);
 
-    // Parse the VIABILITY SCORE from the evaluation - this is the SINGLE SOURCE OF TRUTH
+    // Parse the DETECTED EXECUTION MODE from the evaluation
+    const modeMatch = evaluationResult.match(/DETECTED EXECUTION MODE:\s*([^\n(]+)/i);
+    let inferredExecutionMode = "Indie / Micro-SaaS";
+    if (modeMatch) {
+      const detectedMode = modeMatch[1].trim();
+      if (detectedMode.toLowerCase().includes("venture") || detectedMode.toLowerCase().includes("hard tech")) {
+        inferredExecutionMode = "Venture / Hard Tech";
+      } else {
+        inferredExecutionMode = "Indie / Micro-SaaS";
+      }
+    }
+    console.log("Inferred execution mode:", inferredExecutionMode);
+
+    // Parse the VIABILITY SCORE from the evaluation
     const scoreMatch = evaluationResult.match(/VIABILITY SCORE:\s*(\d+)%?/i) || 
                        evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
     let viabilityScore: number | null = null;
@@ -457,8 +460,7 @@ First classify the idea into one of the categories, then provide your verdict fo
     const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY:\s*(LOW|MEDIUM|EXTREME)/i);
     const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : "MEDIUM";
 
-    // Deterministic verdict based on viability score (NEVER trust AI's verdict string)
-    // Score >= 70 → BUILD, Score 40-69 → NARROW, Score < 40 → KILL
+    // Deterministic verdict based on viability score
     let verdict: string;
     if (viabilityScore !== null) {
       if (viabilityScore >= 70) {
@@ -468,9 +470,8 @@ First classify the idea into one of the categories, then provide your verdict fo
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory} → ${verdict}`);
+      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
     } else {
-      // Fallback ONLY if no score found (should rarely happen)
       verdict = "DO NOT BUILD";
       const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|BUILD|DO NOT BUILD|OPTIONAL)/i);
       if (verdictMatch) {
@@ -489,10 +490,10 @@ First classify the idea into one of the categories, then provide your verdict fo
       JSON.stringify({
         verdict,
         fullEvaluation: evaluationResult,
-        evaluationMode,
         viabilityScore,
         executionDifficulty,
         inferredCategory,
+        inferredExecutionMode,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -12,11 +12,10 @@ import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 interface EvaluationResult {
   verdict: string;
   fullEvaluation: string;
-  projectType?: string;
-  evaluationMode?: string;
   viabilityScore?: number;
   executionDifficulty?: string;
   inferredCategory?: string;
+  inferredExecutionMode?: string;
 }
 
 interface EvaluationInputs {
@@ -26,8 +25,8 @@ interface EvaluationInputs {
   targetUsers: string;
   differentiation: string;
   workflow?: string;
-  evaluationMode?: string;
   inferredCategory?: string;
+  inferredExecutionMode?: string;
 }
 
 const Results = () => {
@@ -70,7 +69,6 @@ const Results = () => {
           targetUsers: inputs.targetUsers,
           differentiation: inputs.differentiation,
           workflow: inputs.workflow || "",
-          evaluationMode: inputs.evaluationMode || "indie",
           evaluationId: dbEvaluationId,
         },
       },
@@ -248,7 +246,7 @@ const Results = () => {
               <IdeaStrengthMeter 
                 fullEvaluation={evaluation.fullEvaluation} 
                 verdict={evaluation.verdict}
-                evaluationMode={inputs?.evaluationMode || evaluation.evaluationMode}
+                inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
               />
             </div>
 

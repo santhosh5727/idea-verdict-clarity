@@ -10,10 +10,10 @@ import { Gauge, Zap } from "lucide-react";
 interface IdeaStrengthMeterProps {
   fullEvaluation: string;
   verdict: string;
-  evaluationMode?: string;
+  inferredExecutionMode?: string;
 }
 
-const IdeaStrengthMeter = ({ fullEvaluation, verdict, evaluationMode }: IdeaStrengthMeterProps) => {
+const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
   // Get viability score from evaluation, or fallback based on definitive verdict
@@ -75,19 +75,13 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict, evaluationMode }: IdeaStre
 
   const color = getColor(animatedPercentage);
 
-  const modeLabels: Record<string, string> = {
-    indie: "Indie / Micro-SaaS",
-    venture: "Venture / Infra",
-    academic: "Academic / Learning"
-  };
-
   return (
     <div className="w-full mt-4 space-y-4">
-      {/* Mode indicator */}
-      {evaluationMode && (
+      {/* Inferred mode indicator - shown subtly after evaluation */}
+      {inferredExecutionMode && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Evaluated as:</span>
-          <span className="font-medium text-foreground">{modeLabels[evaluationMode] || evaluationMode}</span>
+          <span>Evaluation lens used:</span>
+          <span className="font-medium text-foreground">{inferredExecutionMode}</span>
         </div>
       )}
 
