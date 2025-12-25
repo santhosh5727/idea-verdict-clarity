@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import { 
-  parseStrengthScore, 
+  parseViabilityScore, 
+  parseExecutionDifficulty,
   getDefinitiveVerdict, 
   getFallbackScore,
-  getVerdictFromScore 
 } from "@/lib/verdictUtils";
+import { Gauge, Zap } from "lucide-react";
 
 interface IdeaStrengthMeterProps {
   fullEvaluation: string;
   verdict: string;
+  evaluationMode?: string;
 }
 
-const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) => {
+const IdeaStrengthMeter = ({ fullEvaluation, verdict, evaluationMode }: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
-  // Get score from evaluation, or fallback based on definitive verdict
+  // Get viability score from evaluation, or fallback based on definitive verdict
   const getTargetScore = (): number => {
-    const parsedScore = parseStrengthScore(fullEvaluation);
+    const parsedScore = parseViabilityScore(fullEvaluation);
     if (parsedScore !== null) {
       return parsedScore;
     }
@@ -27,6 +29,7 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) 
   };
 
   const targetPercentage = getTargetScore();
+  const executionDifficulty = parseExecutionDifficulty(fullEvaluation);
 
   // Animate the percentage from 0 to target
   useEffect(() => {
@@ -61,42 +64,90 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict }: IdeaStrengthMeterProps) 
     return "text-primary";
   };
 
+  const getDifficultyColor = (difficulty: string): string => {
+    switch (difficulty) {
+      case "LOW": return "text-primary bg-primary/10 border-primary/30";
+      case "MEDIUM": return "text-warning bg-warning/10 border-warning/30";
+      case "EXTREME": return "text-destructive bg-destructive/10 border-destructive/30";
+      default: return "text-muted-foreground bg-muted/10 border-border";
+    }
+  };
+
   const color = getColor(animatedPercentage);
 
+  const modeLabels: Record<string, string> = {
+    indie: "Indie / Micro-SaaS",
+    venture: "Venture / Infra",
+    academic: "Academic / Learning"
+  };
+
   return (
-    <div className="w-full mt-4">
-      {/* Label */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-foreground">Idea Strength Meter</span>
-        <span className={`text-sm font-bold ${getColorClass(animatedPercentage)}`}>
-          {animatedPercentage}%
-        </span>
+    <div className="w-full mt-4 space-y-4">
+      {/* Mode indicator */}
+      {evaluationMode && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Evaluated as:</span>
+          <span className="font-medium text-foreground">{modeLabels[evaluationMode] || evaluationMode}</span>
+        </div>
+      )}
+
+      {/* Two-axis display */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Viability Score */}
+        <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Gauge className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Viability Score</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className={`text-3xl font-bold ${getColorClass(animatedPercentage)}`}>
+              {animatedPercentage}%
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Probability of success in principle
+          </p>
+          
+          {/* Viability bar */}
+          <div className="mt-3 relative h-2 w-full rounded-full bg-muted/50 overflow-hidden">
+            <div 
+              className="absolute inset-0 opacity-20"
+              style={{
+                background: "linear-gradient(to right, hsl(0, 84%, 60%) 0%, hsl(45, 93%, 47%) 50%, hsl(142, 71%, 45%) 100%)"
+              }}
+            />
+            <div
+              className="h-full rounded-full transition-all duration-75 ease-out"
+              style={{
+                width: `${animatedPercentage}%`,
+                backgroundColor: color,
+                boxShadow: `0 0 8px ${color}`,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Execution Difficulty */}
+        <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Execution Difficulty</span>
+          </div>
+          <div className={`inline-flex items-center px-3 py-1 rounded-full border text-sm font-semibold ${getDifficultyColor(executionDifficulty)}`}>
+            {executionDifficulty}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {executionDifficulty === "LOW" && "Can be shipped by solo founder in weeks"}
+            {executionDifficulty === "MEDIUM" && "Requires team, 6-12 months runway"}
+            {executionDifficulty === "EXTREME" && "Requires significant capital, multi-year timeline"}
+            {!["LOW", "MEDIUM", "EXTREME"].includes(executionDifficulty) && "Effort required to build and launch"}
+          </p>
+        </div>
       </div>
 
-      {/* Slider track */}
-      <div className="relative h-3 w-full rounded-full bg-muted/50 overflow-hidden">
-        {/* Gradient background hint */}
-        <div 
-          className="absolute inset-0 opacity-20"
-          style={{
-            background: "linear-gradient(to right, hsl(0, 84%, 60%) 0%, hsl(45, 93%, 47%) 50%, hsl(142, 71%, 45%) 100%)"
-          }}
-        />
-        
-        {/* Filled portion */}
-        <div
-          className="h-full rounded-full transition-all duration-75 ease-out"
-          style={{
-            width: `${animatedPercentage}%`,
-            backgroundColor: color,
-            boxShadow: `0 0 8px ${color}`,
-          }}
-        />
-      </div>
-
-      {/* Description */}
-      <p className="text-xs text-muted-foreground mt-2">
-        Visual representation of idea quality based on problem specificity, feasibility, execution, user clarity, and differentiation.
+      {/* Clarification note */}
+      <p className="text-xs text-muted-foreground">
+        High difficulty does NOT reduce viability. Hard problems can be highly viable. Easy problems can have low viability.
       </p>
     </div>
   );
