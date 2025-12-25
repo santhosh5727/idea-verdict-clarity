@@ -21,6 +21,7 @@ export type Database = {
           full_verdict_text: string
           id: string
           idea_problem: string
+          inferred_category: string | null
           project_name: string | null
           project_type: string
           solution: string | null
@@ -35,6 +36,7 @@ export type Database = {
           full_verdict_text: string
           id?: string
           idea_problem: string
+          inferred_category?: string | null
           project_name?: string | null
           project_type: string
           solution?: string | null
@@ -49,6 +51,7 @@ export type Database = {
           full_verdict_text?: string
           id?: string
           idea_problem?: string
+          inferred_category?: string | null
           project_name?: string | null
           project_type?: string
           solution?: string | null

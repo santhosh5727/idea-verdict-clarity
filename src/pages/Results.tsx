@@ -12,10 +12,11 @@ import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 interface EvaluationResult {
   verdict: string;
   fullEvaluation: string;
-  projectType: string;
+  projectType?: string;
   evaluationMode?: string;
   viabilityScore?: number;
   executionDifficulty?: string;
+  inferredCategory?: string;
 }
 
 interface EvaluationInputs {
@@ -25,8 +26,8 @@ interface EvaluationInputs {
   targetUsers: string;
   differentiation: string;
   workflow?: string;
-  projectType: string;
   evaluationMode?: string;
+  inferredCategory?: string;
 }
 
 const Results = () => {
@@ -69,7 +70,6 @@ const Results = () => {
           targetUsers: inputs.targetUsers,
           differentiation: inputs.differentiation,
           workflow: inputs.workflow || "",
-          projectType: inputs.projectType,
           evaluationMode: inputs.evaluationMode || "indie",
           evaluationId: dbEvaluationId,
         },
@@ -95,7 +95,7 @@ const Results = () => {
         setEvaluation({
           verdict: data.verdict_type,
           fullEvaluation: data.full_verdict_text,
-          projectType: data.project_type,
+          inferredCategory: data.inferred_category || data.project_type,
         });
         setInputs({
           projectName: data.project_name || "",
@@ -104,7 +104,7 @@ const Results = () => {
           targetUsers: data.target_user,
           differentiation: data.differentiation || "",
           workflow: data.workflow || "",
-          projectType: data.project_type,
+          inferredCategory: data.inferred_category || data.project_type,
         });
         setDbEvaluationId(data.id);
         setLoading(false);
@@ -191,12 +191,6 @@ const Results = () => {
 
   const evaluationSections = parseEvaluation(evaluation!.fullEvaluation);
 
-  const projectTypeLabels: Record<string, string> = {
-    startup: "Startup / Business Idea",
-    hardware: "Hardware Project",
-    academic: "Academic / School Project",
-    personal: "Personal Experiment",
-  };
 
   return (
     <div className="min-h-screen">
@@ -243,7 +237,9 @@ const Results = () => {
                     {verdictConfig.label}
                   </span>
                   <p className="text-sm text-foreground/70 mt-1">
-                    {projectTypeLabels[inputs?.projectType || ""] || inputs?.projectType}
+                    {evaluation.inferredCategory || inputs?.inferredCategory 
+                      ? `Detected: ${evaluation.inferredCategory || inputs?.inferredCategory}`
+                      : ""}
                   </p>
                 </div>
               </div>
@@ -340,7 +336,7 @@ const Results = () => {
         verdict={evaluation.verdict}
         fullEvaluation={evaluation.fullEvaluation}
         ideaProblem={inputs?.problem || ""}
-        projectType={inputs?.projectType || ""}
+        projectType={inputs?.inferredCategory || evaluation.inferredCategory || ""}
       />
     </div>
   );

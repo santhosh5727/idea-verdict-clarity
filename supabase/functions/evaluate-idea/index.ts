@@ -2,16 +2,24 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-// Input validation schema
+// Input validation schema - projectType is now removed as it's inferred
 const evaluateSchema = z.object({
   problem: z.string().min(1).max(15000),
   solution: z.string().max(15000).optional().default(""),
   targetUsers: z.string().min(1).max(15000),
   differentiation: z.string().max(15000).optional().default(""),
   workflow: z.string().max(20000).optional(),
-  projectType: z.enum(["startup", "hardware", "academic", "personal"]).optional().default("startup"),
   evaluationMode: z.enum(["indie", "venture", "academic"]).optional().default("indie"),
 });
+
+// Fixed category set for classification
+const IDEA_CATEGORIES = [
+  "SaaS / Tool",
+  "Marketplace",
+  "AI Product",
+  "Content / Community",
+  "Service / Other",
+] as const;
 
 // CORS headers with origin validation
 const getAllowedOrigins = () => {
@@ -53,6 +61,40 @@ const getCorsHeaders = (req: Request) => {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
+};
+
+const getCategoryRiskContext = (category: string) => {
+  const riskContexts: Record<string, string> = {
+    "SaaS / Tool": `
+CATEGORY-SPECIFIC RISKS FOR SAAS/TOOL:
+- Churn risk: How sticky is the solution? Can users easily switch?
+- Feature commoditization: Can competitors copy core features quickly?
+- Pricing pressure: Is there a race to the bottom in this space?`,
+    "Marketplace": `
+CATEGORY-SPECIFIC RISKS FOR MARKETPLACE:
+- Chicken-and-egg problem: How will you bootstrap supply and demand simultaneously?
+- Liquidity risk: Can you achieve enough transactions to be useful?
+- Disintermediation: Will users bypass the platform once connected?
+- Trust & safety costs: What moderation/verification is needed?`,
+    "AI Product": `
+CATEGORY-SPECIFIC RISKS FOR AI PRODUCT:
+- Data dependency: Where does training/inference data come from?
+- Model commoditization: Can competitors use the same base models?
+- Accuracy requirements: What's the cost of errors in this domain?
+- API dependency: Are you building on rented land (OpenAI, etc.)?`,
+    "Content / Community": `
+CATEGORY-SPECIFIC RISKS FOR CONTENT/COMMUNITY:
+- Cold start problem: How do you get the first engaged users?
+- Moderation burden: What content policies and enforcement are needed?
+- Monetization challenge: Can you monetize without killing the community?
+- Network effects: Is there genuine lock-in or can users leave easily?`,
+    "Service / Other": `
+CATEGORY-SPECIFIC RISKS FOR SERVICE/OTHER:
+- Scalability limits: How do you grow beyond your own time?
+- Productization path: Can this become a product or is it forever a service?
+- Margin compression: What prevents clients from pushing fees down?`,
+  };
+  return riskContexts[category] || "";
 };
 
 const getSystemPrompt = (evaluationMode: string) => {
@@ -109,13 +151,22 @@ YOUR MINDSET
 - Your skepticism protects founders from wasting years on doomed ideas.
 
 ────────────────────────
-STEP 1: CLASSIFY PROJECT TYPE
+STEP 1: CLASSIFY IDEA CATEGORY
 ────────────────────────
 
-Classify into ONE:
-- **Startup** - Revenue-seeking business
-- **Project** - Portfolio, academic, or learning effort
-- **Own Experiment** - Personal test or curiosity build
+First, classify the idea into ONE of these categories based on its description:
+- **SaaS / Tool** - Software products, productivity tools, B2B/B2C software
+- **Marketplace** - Two-sided platforms connecting buyers and sellers
+- **AI Product** - Products where AI/ML is the core value proposition
+- **Content / Community** - Media, content platforms, community-driven products
+- **Service / Other** - Services, consulting, hardware, or ideas that don't fit above
+
+If the idea doesn't clearly fit a category, classify it as "Service / Other" rather than guessing.
+
+Output the category at the start of your evaluation:
+DETECTED CATEGORY: [Category Name]
+
+After classifying, apply category-specific risk checks (these are INTERNAL context, not separate output sections).
 
 ────────────────────────
 STEP 2: HARD NEGATIVE GATES (Check First!)
@@ -199,7 +250,7 @@ Only give credit for competition if there's a CLEAR gap you can own.
 OUTPUT FORMAT
 ────────────────────────
 
-PROJECT TYPE: [Startup | Project | Own Experiment]
+DETECTED CATEGORY: [SaaS / Tool | Marketplace | AI Product | Content / Community | Service / Other]
 
 VERDICT: [Will be overridden by score-based logic]
 
@@ -291,7 +342,7 @@ serve(async (req) => {
       );
     }
 
-    const { problem, solution, targetUsers, differentiation, workflow, projectType, evaluationMode } = parseResult.data;
+    const { problem, solution, targetUsers, differentiation, workflow, evaluationMode } = parseResult.data;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -307,8 +358,6 @@ serve(async (req) => {
     let userPrompt = `Evaluate this idea:
 
 EVALUATION MODE: ${modeLabels[evaluationMode] || "Indie / Micro-SaaS"}
-
-PROJECT TYPE: ${projectType}
 
 PROBLEM:
 ${problem}
@@ -331,7 +380,7 @@ ${workflow}`;
 
     userPrompt += `
 
-Provide your verdict following the exact output format. Remember to include BOTH Viability Score AND Execution Difficulty.`;
+First classify the idea into one of the categories, then provide your verdict following the exact output format. Remember to include BOTH Viability Score AND Execution Difficulty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -373,6 +422,26 @@ Provide your verdict following the exact output format. Remember to include BOTH
       throw new Error("No evaluation result received");
     }
 
+    // Parse the DETECTED CATEGORY from the evaluation
+    const categoryMatch = evaluationResult.match(/DETECTED CATEGORY:\s*([^\n]+)/i);
+    let inferredCategory = "Service / Other";
+    if (categoryMatch) {
+      const detectedCat = categoryMatch[1].trim();
+      // Normalize to one of our fixed categories
+      if (detectedCat.toLowerCase().includes("saas") || detectedCat.toLowerCase().includes("tool")) {
+        inferredCategory = "SaaS / Tool";
+      } else if (detectedCat.toLowerCase().includes("marketplace")) {
+        inferredCategory = "Marketplace";
+      } else if (detectedCat.toLowerCase().includes("ai")) {
+        inferredCategory = "AI Product";
+      } else if (detectedCat.toLowerCase().includes("content") || detectedCat.toLowerCase().includes("community")) {
+        inferredCategory = "Content / Community";
+      } else {
+        inferredCategory = "Service / Other";
+      }
+    }
+    console.log("Inferred category:", inferredCategory);
+
     // Parse the VIABILITY SCORE from the evaluation - this is the SINGLE SOURCE OF TRUTH
     const scoreMatch = evaluationResult.match(/VIABILITY SCORE:\s*(\d+)%?/i) || 
                        evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
@@ -399,7 +468,7 @@ Provide your verdict following the exact output format. Remember to include BOTH
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty} → ${verdict}`);
+      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory} → ${verdict}`);
     } else {
       // Fallback ONLY if no score found (should rarely happen)
       verdict = "DO NOT BUILD";
@@ -420,10 +489,10 @@ Provide your verdict following the exact output format. Remember to include BOTH
       JSON.stringify({
         verdict,
         fullEvaluation: evaluationResult,
-        projectType,
         evaluationMode,
         viabilityScore,
         executionDifficulty,
+        inferredCategory,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

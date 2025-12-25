@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Rocket, Cpu, GraduationCap, FlaskConical, Loader2, Target, Building2, BookOpen } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Target, Building2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 
-const steps = ["Evaluation Mode", "Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow", "Project Type"];
+const steps = ["Evaluation Mode", "Project Name", "Problem", "Solution", "Target Users", "Differentiation", "Workflow"];
 
 const stepContent = [
   {
@@ -49,12 +49,6 @@ const stepContent = [
     subtitle: "This optional field helps validate execution realism. Simple, realistic workflows are preferred.",
     isOptional: true,
   },
-  {
-    heading: "Project Type",
-    placeholder: "",
-    subtitle: "Not all ideas are startups. We evaluate based on what you are actually building.",
-    isProjectType: true,
-  },
 ];
 
 const evaluationModes = [
@@ -79,32 +73,6 @@ const evaluationModes = [
   },
 ];
 
-const projectTypes = [
-  {
-    id: "startup",
-    label: "Startup / Business Idea",
-    description: "A product or service intended to generate revenue.",
-    icon: Rocket,
-  },
-  {
-    id: "hardware",
-    label: "Hardware Project",
-    description: "Physical devices, IoT, electronics, robotics, or hardware prototypes.",
-    icon: Cpu,
-  },
-  {
-    id: "academic",
-    label: "Academic / School Project",
-    description: "College projects, final-year projects, research ideas, or assignments.",
-    icon: GraduationCap,
-  },
-  {
-    id: "personal",
-    label: "Personal Experiment",
-    description: "Side projects, learning builds, or technical experiments.",
-    icon: FlaskConical,
-  },
-];
 
 interface PrefilledData {
   problem?: string;
@@ -127,9 +95,8 @@ const Evaluate = () => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   // answers: [evaluationMode, projectName, problem, solution, targetUsers, differentiation, workflow]
-  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", "", "", ""]);
+  const [answers, setAnswers] = useState<string[]>(["", "", "", "", "", "", ""]);
   const [selectedEvaluationMode, setSelectedEvaluationMode] = useState<string>("indie");
-  const [selectedProjectType, setSelectedProjectType] = useState<string>("");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
 
@@ -147,7 +114,6 @@ const Evaluate = () => {
         state.prefilled.targetUsers || "",
         state.prefilled.differentiation || "",
         state.prefilled.workflow || "",
-        "",
       ]);
       // Clear the state so refresh doesn't re-apply
       window.history.replaceState({}, document.title);
@@ -161,10 +127,8 @@ const Evaluate = () => {
         state.editData.targetUsers || "",
         state.editData.differentiation || "",
         state.editData.workflow || "",
-        "",
       ]);
       setSelectedEvaluationMode(state.editData.evaluationMode || "indie");
-      setSelectedProjectType(state.editData.projectType || "");
       if (state.editData.evaluationId) {
         setEditingEvaluationId(state.editData.evaluationId);
       }
@@ -198,13 +162,13 @@ const Evaluate = () => {
         }
 
         // Normalize payload - ensure all values are properly formatted
+        // Note: projectType is no longer user-selected - it's inferred by AI
         const payload = {
           problem: answers[2].trim(),
           solution: answers[3].trim() || undefined,
           targetUsers: answers[4].trim(),
           differentiation: answers[5].trim() || undefined,
           workflow: answers[6].trim() || undefined,
-          projectType: selectedProjectType || "startup",
           evaluationMode: selectedEvaluationMode || "indie",
         };
 
@@ -239,6 +203,7 @@ const Evaluate = () => {
         const result = await response.json();
         
         // Save evaluation to database
+        // Note: project_type and inferred_category come from AI response
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
             user_id: user.id,
@@ -248,9 +213,10 @@ const Evaluate = () => {
             target_user: payload.targetUsers,
             differentiation: payload.differentiation || null,
             workflow: payload.workflow || null,
-            project_type: payload.projectType,
+            project_type: result.inferredCategory || "Other",
             verdict_type: result.verdict,
             full_verdict_text: result.fullEvaluation,
+            inferred_category: result.inferredCategory || null,
           });
           
           if (saveError) {
@@ -270,8 +236,8 @@ const Evaluate = () => {
               targetUsers: payload.targetUsers,
               differentiation: payload.differentiation,
               workflow: payload.workflow,
-              projectType: payload.projectType,
               evaluationMode: payload.evaluationMode,
+              inferredCategory: result.inferredCategory,
             }
           } 
         });
@@ -313,15 +279,13 @@ const Evaluate = () => {
   const currentTrimmedLength = getTrimmedLength(answers[currentStep]);
   const meetsMinimum = currentTrimmedLength >= minChars;
 
-  const canContinue = stepContent[currentStep].isProjectType 
-    ? selectedProjectType !== ""
-    : stepContent[currentStep].isEvaluationMode
+  const canContinue = stepContent[currentStep].isEvaluationMode
     ? selectedEvaluationMode !== ""
     : isOptionalStep || meetsMinimum;
 
   // Validation message for current step
   const getValidationMessage = (): string | null => {
-    if (stepContent[currentStep].isProjectType || stepContent[currentStep].isEvaluationMode || isOptionalStep) return null;
+    if (stepContent[currentStep].isEvaluationMode || isOptionalStep) return null;
     if (meetsMinimum) return null;
     if (isProjectNameStep && minChars > 0) {
       return "Please enter a project name.";
@@ -470,62 +434,6 @@ const Evaluate = () => {
                   maxLength={100}
                 />
               </>
-            ) : stepContent[currentStep].isProjectType ? (
-              <div className="grid gap-4 sm:grid-cols-2 mx-auto max-w-2xl">
-                {projectTypes.map((type) => {
-                  const Icon = type.icon;
-                  const isSelected = selectedProjectType === type.id;
-                  return (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => setSelectedProjectType(type.id)}
-                      disabled={isEvaluating}
-                      className={`group text-left rounded-xl border p-5 transition-all duration-300 ${
-                        isSelected
-                          ? "border-primary bg-primary/10 shadow-lg"
-                          : "border-border/50 bg-card/90 backdrop-blur-sm shadow-card hover:shadow-lg hover:border-primary/30"
-                      } ${isEvaluating ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                            isSelected
-                              ? "bg-primary/20"
-                              : "bg-primary/10 group-hover:bg-primary/20"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <h3
-                            className={`font-semibold transition-colors ${
-                              isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
-                            }`}
-                          >
-                            {type.label}
-                          </h3>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {type.description}
-                          </p>
-                        </div>
-                        {/* Selection indicator */}
-                        <div
-                          className={`mt-1 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                            isSelected
-                              ? "border-primary bg-primary"
-                              : "border-border"
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="h-2 w-2 rounded-full bg-primary-foreground" />
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
             ) : (
               <>
                 {!stepContent[currentStep].subtitle && <div className="mb-6" />}
