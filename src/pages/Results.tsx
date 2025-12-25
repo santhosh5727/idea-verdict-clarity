@@ -186,6 +186,9 @@ const Results = () => {
         // Clean up markdown formatting
         content = content.replace(/^\*\*|\*\*$/g, '').trim();
         
+        // Format content for better readability
+        content = formatSectionContent(content);
+        
         if (content && !sections.find(s => s.title === pattern.title)) {
           sections.push({ title: pattern.title, content });
         }
@@ -195,8 +198,71 @@ const Results = () => {
     return sections;
   };
 
-  const evaluationSections = parseEvaluation(evaluation!.fullEvaluation);
+  // Format section content with proper punctuation and structure
+  const formatSectionContent = (content: string): string => {
+    // Split by line breaks or bullet points
+    const lines = content.split(/\n+/).filter(line => line.trim());
+    
+    if (lines.length <= 1) {
+      return content;
+    }
+    
+    // Format each line as a bullet point if it looks like a list
+    const formattedLines = lines.map((line, index) => {
+      let cleaned = line.trim();
+      // Remove existing bullets, dashes, or numbers at start
+      cleaned = cleaned.replace(/^[-•*]\s*/, '');
+      cleaned = cleaned.replace(/^\d+[.)]\s*/, '');
+      
+      // Add colon after first phrase if it looks like a heading
+      if (cleaned.includes(' ') && !cleaned.includes(':') && cleaned.length < 80) {
+        const words = cleaned.split(' ');
+        if (words.length >= 2 && words.length <= 6) {
+          // Check if first few words are capitalized (likely a heading)
+          const firstPart = words.slice(0, Math.min(3, words.length)).join(' ');
+          if (/^[A-Z]/.test(firstPart)) {
+            // It might be a heading, leave as is or add pointer
+            return `• ${cleaned}`;
+          }
+        }
+      }
+      
+      return `• ${cleaned}`;
+    });
+    
+    return formattedLines.join('\n');
+  };
 
+  // Generate a summary from the evaluation
+  const generateSummary = (text: string, verdictType: string): string => {
+    // Extract key points for summary
+    const primaryReasonMatch = text.match(/PRIMARY REASON:\s*([^\n]+)/i);
+    const harshTruthMatch = text.match(/HARSH TRUTH:\s*([^\n]+)/i);
+    
+    const primaryReason = primaryReasonMatch ? primaryReasonMatch[1].trim() : "";
+    const harshTruth = harshTruthMatch ? harshTruthMatch[1].trim() : "";
+    
+    if (primaryReason && harshTruth) {
+      return `${primaryReason}\n\n${harshTruth}`;
+    } else if (primaryReason) {
+      return primaryReason;
+    } else if (harshTruth) {
+      return harshTruth;
+    }
+    
+    // Fallback: extract first meaningful paragraph
+    const paragraphs = text.split(/\n\n+/).filter(p => 
+      p.trim() && 
+      !p.includes('VERDICT:') && 
+      !p.includes('SCORE:') &&
+      p.length > 50
+    );
+    
+    return paragraphs[0]?.trim() || "";
+  };
+
+  const evaluationSections = parseEvaluation(evaluation!.fullEvaluation);
+  const summaryText = generateSummary(evaluation!.fullEvaluation, definitiveVerdictType);
 
   return (
     <div className="min-h-screen">
@@ -281,14 +347,25 @@ const Results = () => {
 
             </div>
 
-            {/* Evaluation Sections */}
+            {/* Summary Section */}
+            {summaryText && (
+              <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-sm p-5 sm:p-6 shadow-card">
+                <h3 className="font-bold text-foreground text-lg mb-3">Summary</h3>
+                <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+                  {summaryText}
+                </p>
+              </div>
+            )}
+
+            {/* Full Evaluation Sections */}
             <div className="space-y-3 sm:space-y-4">
+              <h3 className="font-bold text-foreground text-lg">Full Analysis</h3>
               {evaluationSections.map((section) => (
                 <div
                   key={section.title}
                   className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-4 sm:p-5 shadow-card"
                 >
-                  <h3 className="font-semibold text-foreground mb-2 sm:mb-3">{section.title}</h3>
+                  <h4 className="font-semibold text-foreground mb-2 sm:mb-3">{section.title}</h4>
                   <div className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed break-words">
                     {section.content}
                   </div>

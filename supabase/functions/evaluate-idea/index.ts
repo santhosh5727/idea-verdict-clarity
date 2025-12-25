@@ -119,32 +119,18 @@ the verdict and score must reflect that clearly.
 SCORING RULES
 ━━━━━━━━━━━━━━━━━━
 
-- 80-100: Clear pull, painful problem, strong leverage, active willingness to pay.
-- 60-79: Real problem but narrow or fragile viability.
-- 40-59: Marginal improvement over existing behavior.
-- Below 40: Feature, hobby, or learning project.
+Output the VIABILITY SCORE as a single integer (0-100) on its own line.
+Do NOT include /100 or percentages.
+Explain the score in one sentence below it.
 
-━━━━━━━━━━━━━━━━━━
-VERDICT RULES
-━━━━━━━━━━━━━━━━━━
+Score to Verdict mapping (STRICT):
+- 0-29: DO NOT BUILD
+- 30-49: RETHINK
+- 50-69: BUILD ONLY IF NARROWED
+- 70-100: BUILD
 
-- BUILD:
-  Use only when there is a clear 10x advantage and strong pull.
-
-- NARROW:
-  Use sparingly.
-  Only if ALL conditions are met:
-  1) A specific, identifiable niche exists.
-  2) Narrowing removes a major adoption barrier.
-  3) Narrowing materially increases willingness to pay.
-  4) The idea would fail without narrowing.
-
-  If any condition is not clearly met,
-  default to DO NOT BUILD.
-
-- DO NOT BUILD:
-  Use when the idea is feature-level, easily substituted, behavior-dependent,
-  or lacks meaningful upside.
+The verdict must strictly follow the score band.
+Do not include any separate NARROW gate logic.
 
 ━━━━━━━━━━━━━━━━━━
 SECTION-SPECIFIC INSTRUCTIONS
@@ -411,26 +397,28 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
     }
     console.log(`Asymmetric upside: ${hasAsymmetricUpside}${asymmetricUpsideReason ? ` - ${asymmetricUpsideReason}` : ""}`);
 
-    // Deterministic verdict based on viability score
+    // Deterministic verdict based on viability score (strict bands)
     let verdict: string;
     if (viabilityScore !== null) {
       if (viabilityScore >= 70) {
         verdict = "BUILD";
-      } else if (viabilityScore >= 40) {
+      } else if (viabilityScore >= 50) {
         verdict = "BUILD ONLY IF NARROWED";
+      } else if (viabilityScore >= 30) {
+        verdict = "RETHINK";
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
+      console.log(`Deterministic verdict: viability=${viabilityScore}, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
     } else {
       verdict = "DO NOT BUILD";
-      const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|BUILD|DO NOT BUILD|OPTIONAL)/i);
+      const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|RETHINK|BUILD|DO NOT BUILD)/i);
       if (verdictMatch) {
         verdict = verdictMatch[1].toUpperCase();
       } else if (evaluationResult.includes("BUILD ONLY IF NARROWED")) {
         verdict = "BUILD ONLY IF NARROWED";
-      } else if (evaluationResult.includes("OPTIONAL")) {
-        verdict = "OPTIONAL";
+      } else if (evaluationResult.includes("RETHINK")) {
+        verdict = "RETHINK";
       } else if (/\bVERDICT:?\s*BUILD\b/i.test(evaluationResult)) {
         verdict = "BUILD";
       }

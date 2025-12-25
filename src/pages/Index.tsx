@@ -229,7 +229,7 @@ const Index = () => {
       <footer className="border-t border-border/40 py-8 bg-gradient-to-r from-primary/5 to-background">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Built for founders who value survival over hype.
+            Built for founders who value honest feedback over false hope.
           </p>
         </div>
       </footer>
