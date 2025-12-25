@@ -139,9 +139,9 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: I
         </div>
       </div>
 
-      {/* Clarification note */}
+      {/* Clarification note - softer language */}
       <p className="text-xs text-muted-foreground">
-        High difficulty does NOT reduce viability. Hard problems can be highly viable. Easy problems can have low viability.
+        Difficulty and viability are independent signals. Complex ideas can be highly viable; simple ideas may have low viability under this lens.
       </p>
     </div>
   );

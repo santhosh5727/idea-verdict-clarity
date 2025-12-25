@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams, Navigate, useNavigate } from "react-router-dom";
-import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
-import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
+import { getDefinitiveVerdict, getVerdictConfig, parseViabilityScore } from "@/lib/verdictUtils";
 
 interface EvaluationResult {
   verdict: string;
@@ -16,6 +16,8 @@ interface EvaluationResult {
   executionDifficulty?: string;
   inferredCategory?: string;
   inferredExecutionMode?: string;
+  hasAsymmetricUpside?: boolean;
+  asymmetricUpsideReason?: string;
 }
 
 interface EvaluationInputs {
@@ -28,6 +30,47 @@ interface EvaluationInputs {
   inferredCategory?: string;
   inferredExecutionMode?: string;
 }
+
+// How to Use This Verdict component
+const HowToUseVerdict = ({ viabilityScore }: { viabilityScore: number }) => {
+  const getGuidance = () => {
+    if (viabilityScore < 40) {
+      return {
+        title: "High execution risk under bootstrap lens",
+        message: "This idea presents significant challenges for a bootstrapped founder. Consider whether you have unfair advantages, unique timing insight, or willingness to accept higher risk before proceeding.",
+        color: "text-destructive/80",
+        bgColor: "bg-destructive/5 border-destructive/20",
+      };
+    }
+    if (viabilityScore < 70) {
+      return {
+        title: "Conditional viability",
+        message: "This idea may work with scope reduction, faster validation, or a more focused target market. Identify the riskiest assumption and test it before committing significant resources.",
+        color: "text-warning/90",
+        bgColor: "bg-warning/5 border-warning/20",
+      };
+    }
+    return {
+      title: "Well-aligned with execution-first path",
+      message: "This idea shows strong alignment with a profitable, bootstrapped approach. Focus on speed-to-market and early customer validation to maintain momentum.",
+      color: "text-primary/90",
+      bgColor: "bg-primary/5 border-primary/20",
+    };
+  };
+
+  const guidance = getGuidance();
+
+  return (
+    <div className={`mt-4 p-3 rounded-lg border ${guidance.bgColor}`}>
+      <p className={`text-xs font-medium ${guidance.color} mb-1`}>
+        How to use this verdict
+      </p>
+      <p className="text-xs text-foreground/70 leading-relaxed">
+        {guidance.message}
+      </p>
+    </div>
+  );
+};
 
 const Results = () => {
   const location = useLocation();
@@ -248,6 +291,41 @@ const Results = () => {
                 verdict={evaluation.verdict}
                 inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
               />
+
+              {/* Evaluation Philosophy Explanation */}
+              <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/30">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    This evaluation uses a <strong className="text-foreground">profitability-first, bootstrap-oriented lens</strong>. 
+                    It is optimized to help founders avoid wasted effort, not to predict venture-scale or unicorn outcomes.
+                  </p>
+                </div>
+              </div>
+
+              {/* Asymmetric Upside Note */}
+              {evaluation.hasAsymmetricUpside && (
+                <div className="mt-3 p-3 rounded-lg bg-warning/5 border border-warning/20">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-foreground leading-relaxed">
+                        <strong>Asymmetric upside detected:</strong> This idea has signals of potential non-linear growth 
+                        (network effects, habit formation, or platform dynamics) that could create outsized returns 
+                        if adoption or timing shifts in your favor.
+                      </p>
+                      {evaluation.asymmetricUpsideReason && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          {evaluation.asymmetricUpsideReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* How to Use This Verdict */}
+              <HowToUseVerdict viabilityScore={parseViabilityScore(evaluation.fullEvaluation) ?? 0} />
             </div>
 
             {/* Evaluation Sections */}

@@ -280,6 +280,26 @@ HARSH TRUTH:
 (One sentence the founder doesn't want to hear but needs to)
 
 ────────────────────────
+STEP 6: ASYMMETRIC UPSIDE DETECTION (Non-scoring)
+────────────────────────
+
+After scoring, check if the idea has potential for ASYMMETRIC UPSIDE.
+This does NOT increase the score. It is an informational signal only.
+
+Detect if ANY of these are present:
+- **Network effects** - Value increases as more users join
+- **Habit formation** - Daily/weekly usage creates stickiness
+- **Cultural adoption potential** - Could become a category or movement
+- **Platform dynamics** - Others build on top of it
+
+If detected, output:
+ASYMMETRIC UPSIDE DETECTED: YES
+(Brief explanation: which signals are present)
+
+If NOT detected:
+ASYMMETRIC UPSIDE DETECTED: NO
+
+────────────────────────
 REMEMBER
 ────────────────────────
 
@@ -460,6 +480,20 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
     const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY:\s*(LOW|MEDIUM|EXTREME)/i);
     const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : "MEDIUM";
 
+    // Parse ASYMMETRIC UPSIDE DETECTED
+    const asymmetricMatch = evaluationResult.match(/ASYMMETRIC UPSIDE DETECTED:\s*(YES|NO)/i);
+    const hasAsymmetricUpside = asymmetricMatch ? asymmetricMatch[1].toUpperCase() === "YES" : false;
+    
+    // Extract asymmetric upside explanation if present
+    let asymmetricUpsideReason = "";
+    if (hasAsymmetricUpside) {
+      const reasonMatch = evaluationResult.match(/ASYMMETRIC UPSIDE DETECTED:\s*YES\s*\n?\(?([^)]+)\)?/i);
+      if (reasonMatch) {
+        asymmetricUpsideReason = reasonMatch[1].trim();
+      }
+    }
+    console.log(`Asymmetric upside: ${hasAsymmetricUpside}${asymmetricUpsideReason ? ` - ${asymmetricUpsideReason}` : ""}`);
+
     // Deterministic verdict based on viability score
     let verdict: string;
     if (viabilityScore !== null) {
@@ -494,6 +528,8 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
         executionDifficulty,
         inferredCategory,
         inferredExecutionMode,
+        hasAsymmetricUpside,
+        asymmetricUpsideReason,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
