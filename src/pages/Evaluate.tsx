@@ -350,17 +350,6 @@ const Evaluate = () => {
       <main className="flex-1 bg-gradient-to-r from-primary/8 via-primary/3 to-background">
         <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16">
           <div className="mx-auto max-w-3xl">
-            {/* Positioning Copy - show on first step (project name) */}
-            {currentStep === 0 && (
-              <div className="mb-6 p-4 rounded-lg border border-border/50 bg-muted/30">
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  <strong className="text-foreground">Note:</strong> This engine is optimized to prevent wasted effort on low-leverage ideas. 
-                  It automatically detects your idea type and applies the appropriate evaluation lens. 
-                  A low score does NOT mean the idea is bad—it means execution risk is high.
-                </p>
-              </div>
-            )}
-
             {/* Step Counter */}
             <p className="mb-2 text-sm text-muted-foreground">
               Step {currentStep + 1} of {steps.length}
