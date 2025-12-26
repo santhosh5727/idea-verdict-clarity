@@ -35,12 +35,12 @@ export const parseExecutionDifficulty = (fullEvaluation: string): string => {
   return match ? match[1].toUpperCase() : "MEDIUM";
 };
 
-// Score to verdict mapping (STRICT bands - NON-NEGOTIABLE)
-// 85-100: BUILD, 65-84: NARROW, 40-64: RETHINK, 0-39: DO NOT BUILD (KILL)
+// Score to verdict mapping (STRICT bands)
+// >65: BUILD, 41-65: NARROW, 31-40: RETHINK, 0-30: DO NOT BUILD (KILL)
 export const getVerdictFromScore = (score: number): VerdictType => {
-  if (score >= 85) return "build";
-  if (score >= 65) return "narrow";
-  if (score >= 40) return "rethink";
+  if (score > 65) return "build";
+  if (score >= 41) return "narrow";
+  if (score >= 31) return "rethink";
   return "kill";
 };
 
@@ -70,13 +70,13 @@ export const getVerdictConfig = (verdictType: VerdictType): VerdictConfig => {
   return configs[verdictType];
 };
 
-// Fallback scores aligned with new verdict bands
+// Fallback scores aligned with verdict bands
 export const getFallbackScore = (verdictType: VerdictType): number => {
   switch (verdictType) {
-    case "build": return 90;      // 85-100 range
-    case "narrow": return 75;     // 65-84 range
-    case "rethink": return 52;    // 40-64 range
-    case "kill": return 25;       // 0-39 range
+    case "build": return 75;      // >65 range
+    case "narrow": return 53;     // 41-65 range
+    case "rethink": return 35;    // 31-40 range
+    case "kill": return 20;       // 0-30 range
     case "optional": return 50;
     default: return 50;
   }
