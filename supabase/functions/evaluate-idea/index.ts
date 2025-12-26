@@ -123,14 +123,14 @@ Output the VIABILITY SCORE as a single integer (0-100) on its own line.
 Do NOT include /100 or percentages.
 Explain the score in one sentence below it.
 
-Score to Verdict mapping (STRICT):
+Score to Verdict mapping (STRICT - NON-NEGOTIABLE):
 - 0-29: DO NOT BUILD
-- 30-49: RETHINK
-- 50-69: BUILD ONLY IF NARROWED
-- 70-100: BUILD
+- 30-50: RETHINK
+- 51-65: NARROW
+- 66-100: BUILD
 
-The verdict must strictly follow the score band.
-Do not include any separate NARROW gate logic.
+The verdict must STRICTLY follow the score band. No exceptions.
+These ranges are FINAL. Never override.
 
 ━━━━━━━━━━━━━━━━━━
 SECTION-SPECIFIC INSTRUCTIONS
@@ -397,26 +397,26 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
     }
     console.log(`Asymmetric upside: ${hasAsymmetricUpside}${asymmetricUpsideReason ? ` - ${asymmetricUpsideReason}` : ""}`);
 
-    // Deterministic verdict based on viability score (strict bands)
+    // Deterministic verdict based on viability score (STRICT bands - NON-NEGOTIABLE)
     let verdict: string;
     if (viabilityScore !== null) {
-      if (viabilityScore >= 70) {
+      if (viabilityScore >= 66) {
         verdict = "BUILD";
-      } else if (viabilityScore >= 50) {
-        verdict = "BUILD ONLY IF NARROWED";
+      } else if (viabilityScore >= 51) {
+        verdict = "NARROW";
       } else if (viabilityScore >= 30) {
         verdict = "RETHINK";
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: viability=${viabilityScore}, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
+      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
     } else {
       verdict = "DO NOT BUILD";
-      const verdictMatch = evaluationResult.match(/VERDICT:\s*(BUILD ONLY IF NARROWED|RETHINK|BUILD|DO NOT BUILD)/i);
+      const verdictMatch = evaluationResult.match(/VERDICT:\s*(NARROW|RETHINK|BUILD|DO NOT BUILD)/i);
       if (verdictMatch) {
         verdict = verdictMatch[1].toUpperCase();
-      } else if (evaluationResult.includes("BUILD ONLY IF NARROWED")) {
-        verdict = "BUILD ONLY IF NARROWED";
+      } else if (evaluationResult.includes("NARROW")) {
+        verdict = "NARROW";
       } else if (evaluationResult.includes("RETHINK")) {
         verdict = "RETHINK";
       } else if (/\bVERDICT:?\s*BUILD\b/i.test(evaluationResult)) {
