@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
-import { getDefinitiveVerdict, VerdictType } from "@/lib/verdictUtils";
+import { getDefinitiveVerdict, getVerdictConfig, parseViabilityScore, VerdictType } from "@/lib/verdictUtils";
 import logo from "@/assets/logo.png";
 
 interface Evaluation {
@@ -43,7 +43,12 @@ const Dashboard = () => {
 
   const buildCount = evaluations.filter((e) => getVerdict(e) === "build").length;
   const narrowCount = evaluations.filter((e) => getVerdict(e) === "narrow").length;
+  const rethinkCount = evaluations.filter((e) => getVerdict(e) === "rethink").length;
   const killCount = evaluations.filter((e) => getVerdict(e) === "kill").length;
+
+  // Get score for display
+  const getScore = (evaluation: Evaluation): number | null => 
+    parseViabilityScore(evaluation.full_verdict_text);
 
   const getVerdictIcon = (verdict: string) => {
     switch (verdict) {
@@ -51,6 +56,8 @@ const Dashboard = () => {
         return <CheckCircle className="h-4 w-4 text-primary" />;
       case "narrow":
         return <AlertCircle className="h-4 w-4 text-warning" />;
+      case "rethink":
+        return <RefreshCw className="h-4 w-4 text-orange-500" />;
       case "kill":
         return <XCircle className="h-4 w-4 text-destructive" />;
       default:
@@ -58,14 +65,19 @@ const Dashboard = () => {
     }
   };
 
-  const getVerdictLabel = (verdict: string) => {
+  const getVerdictLabel = (verdict: string, score: number | null) => {
+    const config = getVerdictConfig(verdict as VerdictType);
+    const scoreText = score !== null ? ` — ${score}%` : "";
+    
     switch (verdict) {
       case "build":
-        return <span className="text-primary font-medium">BUILD</span>;
+        return <span className="text-primary font-medium">{config.label}{scoreText}</span>;
       case "narrow":
-        return <span className="text-warning font-medium">NARROW</span>;
+        return <span className="text-warning font-medium">{config.label}{scoreText}</span>;
+      case "rethink":
+        return <span className="text-orange-500 font-medium">{config.label}{scoreText}</span>;
       case "kill":
-        return <span className="text-destructive font-medium">KILL</span>;
+        return <span className="text-destructive font-medium">{config.label}{scoreText}</span>;
       default:
         return null;
     }
@@ -118,7 +130,7 @@ const Dashboard = () => {
           </div>
 
           {/* Stats */}
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid gap-4 sm:grid-cols-4">
             {/* Build */}
             <div className="rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/40 transition-all duration-300">
               <div className="flex items-center justify-between">
@@ -145,11 +157,24 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {/* Rethink */}
+            <div className="rounded-xl border border-orange-500/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-orange-500/40 transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-foreground/70">Rethink</p>
+                  <p className="text-3xl font-bold text-foreground">{rethinkCount}</p>
+                </div>
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <RefreshCw className="h-6 w-6 text-orange-500" />
+                </div>
+              </div>
+            </div>
+
             {/* Kill */}
             <div className="rounded-xl border border-destructive/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-destructive/40 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-foreground/70">Kill</p>
+                  <p className="text-sm text-foreground/70">Do Not Build</p>
                   <p className="text-3xl font-bold text-foreground">{killCount}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-destructive/10">
@@ -175,6 +200,7 @@ const Dashboard = () => {
             ) : (
             evaluations.map((evaluation) => {
                 const verdict = getVerdict(evaluation);
+                const score = getScore(evaluation);
                 const date = new Date(evaluation.created_at).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
@@ -196,7 +222,7 @@ const Dashboard = () => {
                     )}
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       {getVerdictIcon(verdict)}
-                      {getVerdictLabel(verdict)}
+                      {getVerdictLabel(verdict, score)}
                       <span className="text-foreground/60 ml-2">{date}</span>
                     </div>
                   </Link>

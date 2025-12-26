@@ -36,17 +36,17 @@ export const parseExecutionDifficulty = (fullEvaluation: string): string => {
 };
 
 export const getVerdictFromScore = (score: number): VerdictType => {
-  if (score >= 70) return "build";
-  if (score >= 50) return "narrow";
+  if (score >= 66) return "build";
+  if (score >= 51) return "narrow";
   if (score >= 30) return "rethink";
   return "kill";
 };
 
 export const parseRawVerdict = (verdict: string): VerdictType => {
   const normalized = verdict.toUpperCase().trim();
-  if (normalized.includes("PROCEED TO MVP") || (normalized.includes("BUILD") && !normalized.includes("NARROW") && !normalized.includes("DO NOT"))) return "build";
-  if (normalized.includes("BUILD ONLY IF NARROWED") || normalized.includes("NARROW")) return "narrow";
-  if (normalized === "RETHINK") return "rethink";
+  if (normalized.includes("PROCEED TO MVP") || (normalized === "BUILD") || (normalized.includes("BUILD") && !normalized.includes("NARROW") && !normalized.includes("DO NOT") && !normalized.includes("RETHINK"))) return "build";
+  if (normalized.includes("BUILD ONLY IF NARROWED") || normalized === "NARROW" || normalized.includes("NARROW")) return "narrow";
+  if (normalized.includes("RETHINK")) return "rethink";
   if (normalized === "OPTIONAL") return "optional";
   return "kill";
 };
@@ -60,7 +60,7 @@ export const getDefinitiveVerdict = (fullEvaluation: string, rawVerdict: string)
 export const getVerdictConfig = (verdictType: VerdictType): VerdictConfig => {
   const configs: Record<VerdictType, VerdictConfig> = {
     build: { icon: CheckCircle, color: "text-primary", bgColor: "bg-primary/10", borderColor: "border-primary/20", label: "BUILD" },
-    narrow: { icon: AlertTriangle, color: "text-warning", bgColor: "bg-warning/10", borderColor: "border-warning/20", label: "BUILD ONLY IF NARROWED" },
+    narrow: { icon: AlertTriangle, color: "text-warning", bgColor: "bg-warning/10", borderColor: "border-warning/20", label: "NARROW" },
     rethink: { icon: RefreshCw, color: "text-orange-500", bgColor: "bg-orange-500/10", borderColor: "border-orange-500/20", label: "RETHINK" },
     kill: { icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10", borderColor: "border-destructive/20", label: "DO NOT BUILD" },
     optional: { icon: HelpCircle, color: "text-muted-foreground", bgColor: "bg-muted/10", borderColor: "border-border", label: "OPTIONAL" },
