@@ -29,19 +29,19 @@ export const parseViabilityScore = (fullEvaluation: string): number | null => {
 // Legacy alias
 export const parseStrengthScore = parseViabilityScore;
 
-// Parse EXECUTION DIFFICULTY from evaluation text (no default - must be derived)
+// Parse EXECUTION DIFFICULTY from evaluation text (MANDATORY - always assessed)
 export const parseExecutionDifficulty = (fullEvaluation: string): string => {
-  // Match various difficulty terms
-  const match = fullEvaluation.match(/EXECUTION DIFFICULTY:\s*(EASY|LOW|MEDIUM|MODERATE|HARD|HIGH|EXTREME)/i);
+  // Match difficulty terms - supports both old and new format
+  const match = fullEvaluation.match(/EXECUTION DIFFICULTY[^:]*:\s*(EASY|LOW|MEDIUM|MODERATE|HARD|HIGH|EXTREME)/i);
   if (match) {
     const raw = match[1].toUpperCase();
-    // Normalize values
-    if (raw === "EASY" || raw === "LOW") return "LOW";
+    // Normalize to EASY/MEDIUM/HARD
+    if (raw === "EASY" || raw === "LOW") return "EASY";
     if (raw === "MEDIUM" || raw === "MODERATE") return "MEDIUM";
-    if (raw === "HARD" || raw === "HIGH" || raw === "EXTREME") return "EXTREME";
+    if (raw === "HARD" || raw === "HIGH" || raw === "EXTREME") return "HARD";
   }
-  // Return empty string if not found - UI should handle this case
-  return "";
+  // Default to MEDIUM if not found (should always be present per prompt)
+  return "MEDIUM";
 };
 
 // Score to verdict mapping (STRICT bands)

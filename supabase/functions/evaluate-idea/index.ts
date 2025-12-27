@@ -203,10 +203,10 @@ SCORING ALGORITHM
    - If score is 35-45%, strongly consider pushing it lower or higher (avoid the dead zone)
 
 4. Assign Verdict (STRICT - NON-NEGOTIABLE):
-   - 85-100%: BUILD - Strong signal to pursue immediately
-   - 65-84%: NARROW - Has potential but needs focus/pivoting
-   - 40-64%: RETHINK - Significant flaws, major changes needed
-   - 0-39%: KILL (output as "DO NOT BUILD") - Don't waste time, move on
+   - >65%: BUILD - Strong signal to pursue immediately
+   - 41-65%: NARROW - Has potential but needs focus/pivoting
+   - 31-40%: RETHINK - Significant flaws, major changes needed
+   - 0-30%: KILL (output as "DO NOT BUILD") - Don't waste time, move on
 
 ━━━━━━━━━━━━━━━━━━
 REQUIRED OUTPUT FORMAT (Follow EXACTLY)
@@ -232,9 +232,12 @@ PROJECT TYPE
 DETECTED CATEGORY
 [Category from the list above]
 
-EXECUTION DIFFICULTY
-[LOW / MEDIUM / HIGH]
+EXECUTION DIFFICULTY (MANDATORY - must always be assessed)
+[EASY / MEDIUM / HARD]
+Assessment factors: technical complexity, integrations required, regulatory burden, external dependencies, team specialization needed
 [One sentence justification]
+Estimated team size: [X people]
+Estimated timeline: [X weeks/months]
 
 KEY STRENGTHS
 1. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
@@ -523,9 +526,10 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
       }
     }
 
-    // Parse EXECUTION DIFFICULTY
-    const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY:\s*(LOW|MEDIUM|HIGH)/i);
-    const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : null;
+    // Parse EXECUTION DIFFICULTY (MANDATORY - always assessed)
+    const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY[^:]*:\s*(EASY|MEDIUM|HARD)/i);
+    // Default to MEDIUM if not found (should always be present per prompt)
+    const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : "MEDIUM";
 
     // Parse ASYMMETRIC UPSIDE DETECTED
     const asymmetricMatch = evaluationResult.match(/ASYMMETRIC UPSIDE DETECTED:\s*(YES|NO)/i);
@@ -542,14 +546,14 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
     console.log(`Asymmetric upside: ${hasAsymmetricUpside}${asymmetricUpsideReason ? ` - ${asymmetricUpsideReason}` : ""}`);
 
     // Deterministic verdict based on viability score (STRICT bands - NON-NEGOTIABLE)
-    // 85-100: BUILD, 65-84: NARROW, 40-64: RETHINK, 0-39: DO NOT BUILD (KILL)
+    // >65: BUILD, 41-65: NARROW, 31-40: RETHINK, 0-30: DO NOT BUILD (KILL)
     let verdict: string;
     if (viabilityScore !== null) {
-      if (viabilityScore >= 85) {
+      if (viabilityScore > 65) {
         verdict = "BUILD";
-      } else if (viabilityScore >= 65) {
+      } else if (viabilityScore >= 41) {
         verdict = "NARROW";
-      } else if (viabilityScore >= 40) {
+      } else if (viabilityScore >= 31) {
         verdict = "RETHINK";
       } else {
         verdict = "DO NOT BUILD";

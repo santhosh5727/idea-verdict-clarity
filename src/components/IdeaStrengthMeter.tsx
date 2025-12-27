@@ -66,15 +66,12 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: I
 
   const getDifficultyColor = (difficulty: string): string => {
     switch (difficulty) {
-      case "LOW": return "text-primary bg-primary/10 border-primary/30";
+      case "EASY": return "text-primary bg-primary/10 border-primary/30";
       case "MEDIUM": return "text-warning bg-warning/10 border-warning/30";
-      case "EXTREME": return "text-destructive bg-destructive/10 border-destructive/30";
-      default: return "text-muted-foreground bg-muted/10 border-border"; // For unset/unknown
+      case "HARD": return "text-destructive bg-destructive/10 border-destructive/30";
+      default: return "text-warning bg-warning/10 border-warning/30"; // Default to MEDIUM styling
     }
   };
-
-  // Only show difficulty if it was explicitly derived
-  const showDifficulty = executionDifficulty !== "";
 
   const color = getColor(animatedPercentage);
 
@@ -124,36 +121,21 @@ const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: I
           </div>
         </div>
 
-        {/* Execution Difficulty - only shown if explicitly derived */}
-        {showDifficulty ? (
-          <div className="rounded-lg border border-border/50 bg-card/50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">Execution Difficulty</span>
-            </div>
-            <div className={`inline-flex items-center px-3 py-1 rounded-full border text-sm font-semibold ${getDifficultyColor(executionDifficulty)}`}>
-              {executionDifficulty}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {executionDifficulty === "LOW" && "Can be shipped by solo founder in weeks"}
-              {executionDifficulty === "MEDIUM" && "Requires team, 6-12 months runway"}
-              {executionDifficulty === "EXTREME" && "Requires significant capital, multi-year timeline"}
-            </p>
+        {/* Execution Difficulty - always shown */}
+        <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Execution Difficulty</span>
           </div>
-        ) : (
-          <div className="rounded-lg border border-border/50 bg-card/50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">Execution Difficulty</span>
-            </div>
-            <div className="inline-flex items-center px-3 py-1 rounded-full border text-sm font-semibold text-muted-foreground bg-muted/10 border-border">
-              Not assessed
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Difficulty was not explicitly determined in this evaluation
-            </p>
+          <div className={`inline-flex items-center px-3 py-1 rounded-full border text-sm font-semibold ${getDifficultyColor(executionDifficulty)}`}>
+            {executionDifficulty}
           </div>
-        )}
+          <p className="text-xs text-muted-foreground mt-2">
+            {executionDifficulty === "EASY" && "Can be shipped by solo founder in weeks"}
+            {executionDifficulty === "MEDIUM" && "Requires small team, 3-6 months runway"}
+            {executionDifficulty === "HARD" && "Requires significant capital, multi-year timeline"}
+          </p>
+        </div>
       </div>
 
       {/* Clarification note - softer language */}
