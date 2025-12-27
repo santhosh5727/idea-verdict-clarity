@@ -373,8 +373,8 @@ const Results = () => {
               ))}
             </div>
 
-            {/* Full Evaluation (collapsible) */}
-            <details className="mt-6 rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm shadow-card">
+            {/* Full Evaluation (collapsible, open by default) */}
+            <details open className="mt-6 rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm shadow-card">
               <summary className="p-5 cursor-pointer font-semibold text-foreground hover:text-primary transition-colors">
                 View Full Evaluation
               </summary>
