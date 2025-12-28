@@ -246,9 +246,19 @@ const Evaluate = () => {
         const result = await response.json();
         
         // Debug logging for score pass-through
-        console.log("API Response:", result);
-        console.log("viabilityScore from API:", result.viabilityScore);
-        console.log("executionDifficulty from API:", result.executionDifficulty);
+        console.log("=== API RESPONSE DEBUG ===");
+        console.log("Full result:", result);
+        console.log("result.viabilityScore:", result.viabilityScore);
+        console.log("result.executionDifficulty:", result.executionDifficulty);
+        
+        // Extract and validate scores explicitly
+        const viabilityScore = typeof result.viabilityScore === 'number' 
+          ? result.viabilityScore 
+          : null;
+        const executionDifficulty = result.executionDifficulty || "MEDIUM";
+        
+        console.log("Extracted viabilityScore:", viabilityScore);
+        console.log("Extracted executionDifficulty:", executionDifficulty);
         
         // Save evaluation to database
         if (user) {
@@ -275,7 +285,11 @@ const Evaluate = () => {
         // Navigate to results with the evaluation data
         navigate("/results", { 
           state: { 
-            evaluation: result,
+            evaluation: {
+              ...result,
+              viabilityScore: viabilityScore,
+              executionDifficulty: executionDifficulty,
+            },
             inputs: {
               projectType: selectedProjectType,
               projectName: answers[0].trim(),
