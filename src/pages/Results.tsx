@@ -318,9 +318,18 @@ const Results = () => {
               </div>
 
               {/* Viability Score + Execution Difficulty */}
+              {(() => {
+                console.log("Passing to IdeaStrengthMeter:", {
+                  viabilityScore: evaluation.viabilityScore,
+                  executionDifficulty: evaluation.executionDifficulty
+                });
+                return null;
+              })()}
               <IdeaStrengthMeter 
                 fullEvaluation={evaluation.fullEvaluation} 
                 verdict={evaluation.verdict}
+                viabilityScore={evaluation.viabilityScore}
+                executionDifficulty={evaluation.executionDifficulty}
                 inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
               />
 

@@ -245,6 +245,11 @@ const Evaluate = () => {
 
         const result = await response.json();
         
+        // Debug logging for score pass-through
+        console.log("API Response:", result);
+        console.log("viabilityScore from API:", result.viabilityScore);
+        console.log("executionDifficulty from API:", result.executionDifficulty);
+        
         // Save evaluation to database
         if (user) {
           const { error: saveError } = await supabase.from("evaluations").insert({
