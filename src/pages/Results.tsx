@@ -321,8 +321,6 @@ const Results = () => {
               <IdeaStrengthMeter 
                 fullEvaluation={evaluation.fullEvaluation} 
                 verdict={evaluation.verdict}
-                viabilityScore={evaluation.viabilityScore}
-                executionDifficulty={evaluation.executionDifficulty}
                 inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
               />
 
