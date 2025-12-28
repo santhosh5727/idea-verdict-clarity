@@ -10,26 +10,55 @@ import { Gauge, Zap } from "lucide-react";
 interface IdeaStrengthMeterProps {
   fullEvaluation: string;
   verdict: string;
+  viabilityScore?: number;
+  executionDifficulty?: string;
   inferredExecutionMode?: string;
 }
 
-const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: IdeaStrengthMeterProps) => {
+const IdeaStrengthMeter = ({ 
+  fullEvaluation, 
+  verdict, 
+  viabilityScore,
+  executionDifficulty: executionDifficultyProp,
+  inferredExecutionMode 
+}: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
-  // Get viability score from evaluation, or fallback based on definitive verdict
+  // Get viability score: prefer direct prop, then parse from text, then fallback
   const getTargetScore = (): number => {
+    // 1. Use direct prop if provided
+    if (viabilityScore !== undefined && viabilityScore !== null) {
+      console.log("Using viabilityScore prop:", viabilityScore);
+      return viabilityScore;
+    }
+    
+    // 2. Try to parse from fullEvaluation text
     const parsedScore = parseViabilityScore(fullEvaluation);
     if (parsedScore !== null) {
+      console.log("Using parsed viabilityScore:", parsedScore);
       return parsedScore;
     }
     
-    // Fallback: derive verdict from raw string and get fallback score
+    // 3. Fallback: derive verdict from raw string and get fallback score
     const verdictType = getDefinitiveVerdict(fullEvaluation, verdict);
-    return getFallbackScore(verdictType);
+    const fallback = getFallbackScore(verdictType);
+    console.log("Using fallback viabilityScore:", fallback, "for verdict:", verdictType);
+    return fallback;
+  };
+
+  // Get execution difficulty: prefer direct prop, then parse from text
+  const getExecutionDifficulty = (): string => {
+    if (executionDifficultyProp) {
+      console.log("Using executionDifficulty prop:", executionDifficultyProp);
+      return executionDifficultyProp;
+    }
+    const parsed = parseExecutionDifficulty(fullEvaluation);
+    console.log("Using parsed executionDifficulty:", parsed);
+    return parsed || "MEDIUM";
   };
 
   const targetPercentage = getTargetScore();
-  const executionDifficulty = parseExecutionDifficulty(fullEvaluation);
+  const executionDifficulty = getExecutionDifficulty();
 
   // Animate the percentage from 0 to target
   useEffect(() => {
