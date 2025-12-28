@@ -317,19 +317,10 @@ const Results = () => {
                 </div>
               </div>
 
-              {/* Viability Score + Execution Difficulty */}
-              {(() => {
-                console.log("Passing to IdeaStrengthMeter:", {
-                  viabilityScore: evaluation.viabilityScore,
-                  executionDifficulty: evaluation.executionDifficulty
-                });
-                return null;
-              })()}
+              {/* Viability Score + Execution Difficulty - uses fullEvaluation as single source of truth */}
               <IdeaStrengthMeter 
                 fullEvaluation={evaluation.fullEvaluation} 
                 verdict={evaluation.verdict}
-                viabilityScore={evaluation.viabilityScore}
-                executionDifficulty={evaluation.executionDifficulty}
                 inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
               />
 
