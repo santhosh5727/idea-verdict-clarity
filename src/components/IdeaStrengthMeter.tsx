@@ -10,26 +10,44 @@ import { Gauge, Zap } from "lucide-react";
 interface IdeaStrengthMeterProps {
   fullEvaluation: string;
   verdict: string;
+  viabilityScore?: number;
+  executionDifficulty?: string;
   inferredExecutionMode?: string;
 }
 
-const IdeaStrengthMeter = ({ fullEvaluation, verdict, inferredExecutionMode }: IdeaStrengthMeterProps) => {
+const IdeaStrengthMeter = ({ 
+  fullEvaluation, 
+  verdict, 
+  viabilityScore,
+  executionDifficulty: executionDifficultyProp,
+  inferredExecutionMode 
+}: IdeaStrengthMeterProps) => {
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
 
-  // Get viability score from evaluation, or fallback based on definitive verdict
+  // Get viability score - prioritize pre-parsed prop over re-parsing
   const getTargetScore = (): number => {
+    // First priority: use pre-parsed score from edge function
+    if (viabilityScore !== null && viabilityScore !== undefined) {
+      return viabilityScore;
+    }
+    
+    // Fallback: parse from fullEvaluation (for old database records)
     const parsedScore = parseViabilityScore(fullEvaluation);
     if (parsedScore !== null) {
       return parsedScore;
     }
     
-    // Fallback: derive verdict from raw string and get fallback score
+    // Last resort: fallback scores based on verdict
     const verdictType = getDefinitiveVerdict(fullEvaluation, verdict);
     return getFallbackScore(verdictType);
   };
 
   const targetPercentage = getTargetScore();
-  const executionDifficulty = parseExecutionDifficulty(fullEvaluation);
+  
+  // Use prop first, then parse, then default to MEDIUM
+  const executionDifficulty = executionDifficultyProp || 
+    parseExecutionDifficulty(fullEvaluation) || 
+    "MEDIUM";
 
   // Animate the percentage from 0 to target
   useEffect(() => {
