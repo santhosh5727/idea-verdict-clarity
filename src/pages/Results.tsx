@@ -4,10 +4,11 @@ import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
-import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
+
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
-import { parseViabilityScore, parseExecutionDifficulty, getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
+import { parseViabilityScore, parseExecutionDifficulty, parseExecutionTimeEstimate, getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
+import { Gauge, Zap } from "lucide-react";
 
 interface EvaluationResult {
   verdict: string;
@@ -132,9 +133,46 @@ const Results = () => {
   // Parse values from fullEvaluation (SINGLE SOURCE OF TRUTH)
   const parsedViabilityScore = parseViabilityScore(evaluation.fullEvaluation);
   const parsedExecutionDifficulty = parseExecutionDifficulty(evaluation.fullEvaluation);
+  const parsedTimeEstimate = parseExecutionTimeEstimate(evaluation.fullEvaluation);
   const definitiveVerdictType = getDefinitiveVerdict(evaluation.fullEvaluation, evaluation.verdict);
   const verdictConfig = getVerdictConfig(definitiveVerdictType);
   const VerdictIcon = verdictConfig.icon;
+
+  // Check if all required values are present - hide entire section if any missing
+  const hasAllRequiredValues = parsedViabilityScore !== null && parsedExecutionDifficulty !== null;
+
+  // Helper functions for difficulty styling
+  const getDifficultyColor = (difficulty: string): string => {
+    switch (difficulty) {
+      case "EASY": return "text-primary bg-primary/10 border-primary/30";
+      case "MEDIUM": return "text-warning bg-warning/10 border-warning/30";
+      case "HARD": return "text-destructive bg-destructive/10 border-destructive/30";
+      default: return "text-warning bg-warning/10 border-warning/30";
+    }
+  };
+
+  const getScoreColorClass = (percentage: number): string => {
+    if (percentage < 40) return "text-destructive";
+    if (percentage < 70) return "text-warning";
+    return "text-primary";
+  };
+
+  const getScoreBarColor = (percentage: number): string => {
+    if (percentage < 40) return "hsl(0, 84%, 60%)";
+    if (percentage < 70) return "hsl(45, 93%, 47%)";
+    return "hsl(142, 71%, 45%)";
+  };
+
+  const getDifficultyTimeText = (difficulty: string, timeEstimate: string | null): string => {
+    if (timeEstimate) return timeEstimate;
+    // Fallback text based on difficulty level
+    switch (difficulty) {
+      case "EASY": return "Can be shipped by solo founder in weeks";
+      case "MEDIUM": return "Requires small team, 3-6 months runway";
+      case "HARD": return "Requires significant capital, multi-year timeline";
+      default: return "";
+    }
+  };
 
 
   // Parse the full evaluation into sections
@@ -301,10 +339,11 @@ const Results = () => {
               </div>
             )}
 
-            {/* Verdict Card - only show if we can parse viability score from fullEvaluation */}
-            {parsedViabilityScore !== null && (
+            {/* Result Overview Section - only show if all required values are present */}
+            {hasAllRequiredValues && (
               <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
-                <div className="flex items-center gap-3 sm:gap-4">
+                {/* Result Header */}
+                <div className="flex items-center gap-3 sm:gap-4 mb-4">
                   <div className={`p-2 sm:p-3 rounded-xl ${verdictConfig.bgColor} flex-shrink-0`}>
                     <VerdictIcon className={`h-8 w-8 sm:h-10 sm:w-10 ${verdictConfig.color}`} />
                   </div>
@@ -320,12 +359,71 @@ const Results = () => {
                   </div>
                 </div>
 
-                {/* Viability Score + Execution Difficulty - parsed from fullEvaluation */}
-                <IdeaStrengthMeter 
-                  fullEvaluation={evaluation.fullEvaluation} 
-                  verdict={evaluation.verdict}
-                  inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
-                />
+                {/* Evaluation lens indicator */}
+                {(inputs?.inferredExecutionMode || evaluation.inferredExecutionMode) && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                    <span>Evaluation lens used:</span>
+                    <span className="font-medium text-foreground">
+                      {inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
+                    </span>
+                  </div>
+                )}
+
+                {/* Score & Difficulty Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* LEFT CARD — Viability Score */}
+                  <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Gauge className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Viability Score</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-3xl font-bold ${getScoreColorClass(parsedViabilityScore!)}`}>
+                        {parsedViabilityScore}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Probability of success in principle
+                    </p>
+                    
+                    {/* Viability bar */}
+                    <div className="mt-3 relative h-2 w-full rounded-full bg-muted/50 overflow-hidden">
+                      <div 
+                        className="absolute inset-0 opacity-20"
+                        style={{
+                          background: "linear-gradient(to right, hsl(0, 84%, 60%) 0%, hsl(45, 93%, 47%) 50%, hsl(142, 71%, 45%) 100%)"
+                        }}
+                      />
+                      <div
+                        className="h-full rounded-full transition-all duration-75 ease-out"
+                        style={{
+                          width: `${parsedViabilityScore}%`,
+                          backgroundColor: getScoreBarColor(parsedViabilityScore!),
+                          boxShadow: `0 0 8px ${getScoreBarColor(parsedViabilityScore!)}`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* RIGHT CARD — Execution Difficulty */}
+                  <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Execution Difficulty</span>
+                    </div>
+                    <div className={`inline-flex items-center px-3 py-1 rounded-full border text-sm font-semibold ${getDifficultyColor(parsedExecutionDifficulty!)}`}>
+                      {parsedExecutionDifficulty}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {getDifficultyTimeText(parsedExecutionDifficulty!, parsedTimeEstimate)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footnote */}
+                <p className="text-xs text-muted-foreground mt-4">
+                  Difficulty and viability are independent signals. Complex ideas can be highly viable; simple ideas may have low viability under this lens.
+                </p>
               </div>
             )}
 
