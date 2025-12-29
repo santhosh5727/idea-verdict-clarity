@@ -30,7 +30,7 @@ export const parseViabilityScore = (fullEvaluation: string): number | null => {
 export const parseStrengthScore = parseViabilityScore;
 
 // Parse EXECUTION DIFFICULTY from evaluation text (MANDATORY - always assessed)
-export const parseExecutionDifficulty = (fullEvaluation: string): string => {
+export const parseExecutionDifficulty = (fullEvaluation: string): string | null => {
   // Match difficulty terms - supports both old and new format
   const match = fullEvaluation.match(/EXECUTION DIFFICULTY[^:]*:\s*(EASY|LOW|MEDIUM|MODERATE|HARD|HIGH|EXTREME)/i);
   if (match) {
@@ -40,8 +40,18 @@ export const parseExecutionDifficulty = (fullEvaluation: string): string => {
     if (raw === "MEDIUM" || raw === "MODERATE") return "MEDIUM";
     if (raw === "HARD" || raw === "HIGH" || raw === "EXTREME") return "HARD";
   }
-  // Default to MEDIUM if not found (should always be present per prompt)
-  return "MEDIUM";
+  // Return null if not found - do NOT default
+  return null;
+};
+
+// Parse time estimate from EXECUTION DIFFICULTY section
+export const parseExecutionTimeEstimate = (fullEvaluation: string): string | null => {
+  // Look for time estimate pattern in the execution difficulty section
+  const timeMatch = fullEvaluation.match(/EXECUTION DIFFICULTY[^:]*:[^\n]*\n?([^\n]*(?:weeks?|months?|years?|runway)[^\n]*)/i);
+  if (timeMatch) {
+    return timeMatch[1].trim();
+  }
+  return null;
 };
 
 // Score to verdict mapping (STRICT bands)
