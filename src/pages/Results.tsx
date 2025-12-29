@@ -429,40 +429,28 @@ const Results = () => {
 
 
             {/* Summary Section */}
-            {summaryText && (
-              <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-sm p-5 sm:p-6 shadow-card">
-                <h3 className="font-bold text-foreground text-lg mb-3">Summary</h3>
-                <p className="text-foreground leading-relaxed whitespace-pre-wrap">
-                  {summaryText}
-                </p>
-              </div>
-            )}
-
-            {/* Full Evaluation Sections */}
-            <div className="space-y-3 sm:space-y-4">
-              <h3 className="font-bold text-foreground text-lg">Full Analysis</h3>
-              {evaluationSections.map((section) => (
-                <div
-                  key={section.title}
-                  className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm p-4 sm:p-5 shadow-card"
-                >
-                  <h4 className="font-semibold text-foreground mb-2 sm:mb-3">{section.title}</h4>
-                  <div className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed break-words">
-                    {section.content}
-                  </div>
-                </div>
-              ))}
+            <div className="mb-6 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-sm p-5 sm:p-6 shadow-card">
+              <h3 className="font-bold text-foreground text-lg mb-3">Summary</h3>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">VERDICT</p>
+              <p className="text-foreground leading-relaxed">
+                {verdictConfig.label} - {summaryText || "Evaluation completed."}
+              </p>
             </div>
 
-            {/* Full Evaluation (collapsible, open by default) */}
-            <details open className="mt-6 rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm shadow-card">
-              <summary className="p-5 cursor-pointer font-semibold text-foreground hover:text-primary transition-colors">
-                View Full Evaluation
-              </summary>
-              <div className="px-5 pb-5 text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed border-t border-border/30 pt-4">
-                {evaluation!.fullEvaluation}
-              </div>
-            </details>
+            {/* Full Analysis Section */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-foreground text-lg">Full Analysis</h3>
+              
+              {/* View Full Evaluation (collapsible, collapsed by default) */}
+              <details className="rounded-xl border border-border/50 bg-card/90 backdrop-blur-sm shadow-card">
+                <summary className="p-5 cursor-pointer font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-2">
+                  <span className="text-sm">▼</span> View Full Evaluation
+                </summary>
+                <div className="px-5 pb-5 text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed border-t border-border/30 pt-4">
+                  {evaluation!.fullEvaluation}
+                </div>
+              </details>
+            </div>
 
             {/* Actions */}
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
