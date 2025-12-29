@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams, Navigate, useNavigate } from "react-router-dom";
-import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil, AlertTriangle } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
-import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
+
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
-import { getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
+
 
 interface EvaluationResult {
   verdict: string;
@@ -129,10 +129,6 @@ const Results = () => {
     return <Navigate to="/evaluate" replace />;
   }
 
-  // Use single source of truth for verdict (derived from score when available)
-  const definitiveVerdictType = getDefinitiveVerdict(evaluation!.fullEvaluation, evaluation!.verdict);
-  const verdictConfig = getVerdictConfig(definitiveVerdictType);
-  const VerdictIcon = verdictConfig.icon;
 
   // Parse the full evaluation into sections
   const parseEvaluation = (text: string) => {
@@ -262,7 +258,7 @@ const Results = () => {
   };
 
   const evaluationSections = parseEvaluation(evaluation!.fullEvaluation);
-  const summaryText = generateSummary(evaluation!.fullEvaluation, definitiveVerdictType);
+  const summaryText = generateSummary(evaluation!.fullEvaluation, evaluation!.verdict);
 
   return (
     <div className="min-h-screen">
@@ -298,54 +294,6 @@ const Results = () => {
               </div>
             )}
 
-            {/* Verdict Card */}
-            <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
-              
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className={`p-2 sm:p-3 rounded-xl ${verdictConfig.bgColor} flex-shrink-0`}>
-                  <VerdictIcon className={`h-8 w-8 sm:h-10 sm:w-10 ${verdictConfig.color}`} />
-                </div>
-                <div className="min-w-0">
-                  <span className={`text-xl sm:text-2xl font-bold ${verdictConfig.color} md:text-3xl block break-words`}>
-                    {verdictConfig.label}
-                  </span>
-                  <p className="text-sm text-foreground/70 mt-1">
-                    {evaluation.inferredCategory || inputs?.inferredCategory 
-                      ? `Detected: ${evaluation.inferredCategory || inputs?.inferredCategory}`
-                      : ""}
-                  </p>
-                </div>
-              </div>
-
-              {/* Viability Score + Execution Difficulty - uses fullEvaluation as single source of truth */}
-              <IdeaStrengthMeter 
-                fullEvaluation={evaluation.fullEvaluation} 
-                verdict={evaluation.verdict}
-                inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
-              />
-
-              {/* Asymmetric Upside Note */}
-              {evaluation.hasAsymmetricUpside && (
-                <div className="mt-3 p-3 rounded-lg bg-warning/5 border border-warning/20">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs text-foreground leading-relaxed">
-                        <strong>Asymmetric upside detected:</strong> This idea has signals of potential non-linear growth 
-                        (network effects, habit formation, or platform dynamics) that could create outsized returns 
-                        if adoption or timing shifts in your favor.
-                      </p>
-                      {evaluation.asymmetricUpsideReason && (
-                        <p className="text-xs text-muted-foreground mt-1 italic">
-                          {evaluation.asymmetricUpsideReason}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
 
             {/* Summary Section */}
             {summaryText && (
