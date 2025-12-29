@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Loader2, Rocket, Code, Cpu, GraduationCap, Beaker } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Rocket, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -15,33 +15,15 @@ import logo from "@/assets/logo.png";
 const PROJECT_TYPES = [
   { 
     id: "startup", 
-    label: "Startup / Business Idea",
-    description: "A product or service intended to generate revenue and scale.",
+    label: "Startup",
+    description: "A product or service intended to generate revenue, scale, and attract investment.",
     icon: Rocket,
   },
   { 
-    id: "saas", 
-    label: "SaaS / Tool",
-    description: "A software-based tool, platform, or AI product solving a specific problem.",
-    icon: Code,
-  },
-  { 
-    id: "hardware", 
-    label: "Hardware Project",
-    description: "Physical devices, IoT, electronics, robotics, or hardware prototypes.",
-    icon: Cpu,
-  },
-  { 
-    id: "academic", 
-    label: "Academic / School Project",
-    description: "College projects, final-year projects, research ideas, or assignments.",
+    id: "project", 
+    label: "Project",
+    description: "School, college, conference, or personal projects focused on learning and impact.",
     icon: GraduationCap,
-  },
-  { 
-    id: "personal", 
-    label: "Personal Experiment",
-    description: "Side projects, learning builds, prototypes, or technical experiments.",
-    icon: Beaker,
   },
 ] as const;
 
