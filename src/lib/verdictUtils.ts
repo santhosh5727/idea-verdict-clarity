@@ -11,14 +11,15 @@ export interface VerdictConfig {
   label: string;
 }
 
-// Parse VIABILITY SCORE from evaluation text (supports both old and new format)
+// Parse VIABILITY SCORE from evaluation text (supports multiple formats)
 export const parseViabilityScore = (fullEvaluation: string): number | null => {
-  const viabilityMatch = fullEvaluation.match(/VIABILITY SCORE:\s*(\d+)%?/i);
+  // Match "VIABILITY SCORE: 75" or "VIABILITY SCORE\n75" or "VIABILITY SCORE 75"
+  const viabilityMatch = fullEvaluation.match(/VIABILITY SCORE[:\s]*\n?\s*(\d+)%?/i);
   if (viabilityMatch) {
     const score = parseInt(viabilityMatch[1], 10);
     if (!isNaN(score) && score >= 0 && score <= 100) return score;
   }
-  const strengthMatch = fullEvaluation.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
+  const strengthMatch = fullEvaluation.match(/IDEA STRENGTH SCORE[:\s]*\n?\s*(\d+)%?/i);
   if (strengthMatch) {
     const score = parseInt(strengthMatch[1], 10);
     if (!isNaN(score) && score >= 0 && score <= 100) return score;
@@ -31,8 +32,9 @@ export const parseStrengthScore = parseViabilityScore;
 
 // Parse EXECUTION DIFFICULTY from evaluation text (MANDATORY - always assessed)
 export const parseExecutionDifficulty = (fullEvaluation: string): string | null => {
-  // Match difficulty terms - supports both old and new format
-  const match = fullEvaluation.match(/EXECUTION DIFFICULTY[^:]*:\s*(EASY|LOW|MEDIUM|MODERATE|HARD|HIGH|EXTREME)/i);
+  // Match difficulty terms - supports multiple formats including newlines
+  // e.g., "EXECUTION DIFFICULTY (MANDATORY...)\nHARD" or "EXECUTION DIFFICULTY: MEDIUM"
+  const match = fullEvaluation.match(/EXECUTION DIFFICULTY[^)]*\)?[:\s]*\n?\s*(EASY|LOW|MEDIUM|MODERATE|HARD|HIGH|EXTREME)/i);
   if (match) {
     const raw = match[1].toUpperCase();
     // Normalize to EASY/MEDIUM/HARD
