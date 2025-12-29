@@ -4,10 +4,10 @@ import { ArrowLeft, RotateCcw, Loader2, Copy, Check, Pencil } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
-
+import IdeaStrengthMeter from "@/components/IdeaStrengthMeter";
 import logo from "@/assets/logo.png";
 import { toast } from "sonner";
-
+import { parseViabilityScore, parseExecutionDifficulty, getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 
 interface EvaluationResult {
   verdict: string;
@@ -128,6 +128,13 @@ const Results = () => {
   if (!evaluation) {
     return <Navigate to="/evaluate" replace />;
   }
+
+  // Parse values from fullEvaluation (SINGLE SOURCE OF TRUTH)
+  const parsedViabilityScore = parseViabilityScore(evaluation.fullEvaluation);
+  const parsedExecutionDifficulty = parseExecutionDifficulty(evaluation.fullEvaluation);
+  const definitiveVerdictType = getDefinitiveVerdict(evaluation.fullEvaluation, evaluation.verdict);
+  const verdictConfig = getVerdictConfig(definitiveVerdictType);
+  const VerdictIcon = verdictConfig.icon;
 
 
   // Parse the full evaluation into sections
@@ -291,6 +298,34 @@ const Results = () => {
             {inputs?.projectName && (
               <div className="mb-4 text-center">
                 <h2 className="text-lg font-semibold text-foreground">{inputs.projectName}</h2>
+              </div>
+            )}
+
+            {/* Verdict Card - only show if we can parse viability score from fullEvaluation */}
+            {parsedViabilityScore !== null && (
+              <div className={`mb-6 sm:mb-8 rounded-xl border ${verdictConfig.borderColor} bg-card/90 backdrop-blur-sm p-4 sm:p-6 shadow-lg md:p-8`}>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className={`p-2 sm:p-3 rounded-xl ${verdictConfig.bgColor} flex-shrink-0`}>
+                    <VerdictIcon className={`h-8 w-8 sm:h-10 sm:w-10 ${verdictConfig.color}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className={`text-xl sm:text-2xl font-bold ${verdictConfig.color} md:text-3xl block break-words`}>
+                      {verdictConfig.label}
+                    </span>
+                    {(evaluation.inferredCategory || inputs?.inferredCategory) && (
+                      <p className="text-sm text-foreground/70 mt-1">
+                        Detected: {evaluation.inferredCategory || inputs?.inferredCategory}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Viability Score + Execution Difficulty - parsed from fullEvaluation */}
+                <IdeaStrengthMeter 
+                  fullEvaluation={evaluation.fullEvaluation} 
+                  verdict={evaluation.verdict}
+                  inferredExecutionMode={inputs?.inferredExecutionMode || evaluation.inferredExecutionMode}
+                />
               </div>
             )}
 
