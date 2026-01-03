@@ -12,6 +12,10 @@ const MAX_REQUESTS_PER_WINDOW_IP = 15; // Structuring should be less frequent
 // In-memory rate limit store
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
+// In-memory cache for identical submissions
+const responseCache = new Map<string, { result: string; timestamp: number }>();
+const CACHE_TTL_MS = 300_000; // 5 minutes cache
+
 const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
   const now = Date.now();
   const record = rateLimitStore.get(key);
@@ -36,12 +40,45 @@ const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; r
   return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetAt - now };
 };
 
+// Generate cache key
+const generateCacheKey = (idea: string): string => {
+  const content = idea.toLowerCase().trim().substring(0, 500);
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `struct_${hash}`;
+};
+
+// Check cache
+const getCachedResponse = (key: string): string | null => {
+  const cached = responseCache.get(key);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    return cached.result;
+  }
+  if (cached) responseCache.delete(key);
+  return null;
+};
+
+// Set cache
+const setCachedResponse = (key: string, result: string): void => {
+  if (responseCache.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of responseCache.entries()) {
+      if (now - v.timestamp > CACHE_TTL_MS) responseCache.delete(k);
+    }
+  }
+  responseCache.set(key, { result, timestamp: Date.now() });
+};
+
 // Input validation schema with strict limits
 const requestSchema = z.object({
   idea: z.string()
     .min(50, "Idea description must be at least 50 characters")
-    .max(15000, "Idea description exceeds 15,000 characters")
-}).strict(); // Reject unexpected fields
+    .max(5000, "Idea description exceeds 5,000 characters") // Reduced for cost control
+}).strict();
 
 // Allowed origins
 const ALLOWED_ORIGINS = [
@@ -65,7 +102,7 @@ const isOriginAllowed = (origin: string): boolean => {
   return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
 };
 
-// Security headers for all responses (OWASP best practices)
+// Security headers
 const getSecurityHeaders = () => ({
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -101,11 +138,17 @@ const sanitizeText = (text: string): string => {
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
 };
 
+// Truncate for cost control
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
+};
+
 // ============================================================================
 // SYSTEM PROMPT
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are Nova, an idea structuring assistant for IdeaVerdict.
+const SYSTEM_PROMPT = `You are Nova, an idea structuring assistant.
 
 Your ONLY job is to take a raw, unstructured idea description and convert it into a clean, structured format.
 
@@ -136,7 +179,7 @@ Guidelines:
 - Don't add features the user didn't mention
 - Don't assume business models
 - Be concise but complete
-- If information is missing, make reasonable inferences but stay close to what was described
+- If information is missing, make reasonable inferences
 
 IMPORTANT: Return ONLY valid JSON, no markdown, no explanations.`;
 
@@ -202,31 +245,56 @@ serve(async (req) => {
       );
     }
 
-    const idea = sanitizeText(parseResult.data.idea);
+    // Truncate input for cost control
+    const idea = truncateText(sanitizeText(parseResult.data.idea), 3000);
+    
+    // Check cache first
+    const cacheKey = generateCacheKey(idea);
+    const cachedResult = getCachedResponse(cacheKey);
+    
+    if (cachedResult) {
+      console.log("Cache hit for structure request");
+      return new Response(
+        cachedResult,
+        { 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "X-Cache": "HIT"
+          } 
+        }
+      );
+    }
     
     console.log("Structure request:", { ideaLength: idea.length, clientIP: clientIP.substring(0, 10) + "..." });
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "Service configuration error" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Google Gemini API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Structure this idea:\n\n${idea}` },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${SYSTEM_PROMPT}\n\n---\n\nStructure this idea:\n\n${idea}` }]
+          }
         ],
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 1000,
+          responseMimeType: "application/json"
+        }
       }),
     });
 
@@ -237,19 +305,13 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      console.error("Gemini API error:", response.status, errorText);
+      throw new Error("AI service error");
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
       throw new Error("No content received from AI");
@@ -271,20 +333,25 @@ serve(async (req) => {
       if (!structured[field] || typeof structured[field] !== "string") {
         structured[field] = "";
       } else {
-        // Sanitize and limit each field
-        structured[field] = sanitizeText(structured[field]).substring(0, 5000);
+        structured[field] = sanitizeText(structured[field]).substring(0, 2000);
       }
     }
 
     console.log("Structure complete");
 
+    const responseBody = JSON.stringify({ structured });
+    
+    // Cache the result
+    setCachedResponse(cacheKey, responseBody);
+
     return new Response(
-      JSON.stringify({ structured }),
+      responseBody,
       { 
         headers: { 
           ...corsHeaders, 
           "Content-Type": "application/json",
-          "X-RateLimit-Remaining": String(rateLimit.remaining)
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "X-Cache": "MISS"
         } 
       }
     );
