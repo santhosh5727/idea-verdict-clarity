@@ -1,9 +1,105 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+// ============================================================================
+// SECURITY CONFIGURATION
+// ============================================================================
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW_IP = 30; // Chat can be more frequent
+
+// In-memory rate limit store
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
+  const now = Date.now();
+  const record = rateLimitStore.get(key);
+  
+  if (rateLimitStore.size > 10000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (v.resetAt < now) rateLimitStore.delete(k);
+    }
+  }
+  
+  if (!record || record.resetAt < now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1, resetIn: RATE_LIMIT_WINDOW_MS };
+  }
+  
+  if (record.count >= maxRequests) {
+    return { allowed: false, remaining: 0, resetIn: record.resetAt - now };
+  }
+  
+  record.count++;
+  return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetAt - now };
 };
+
+// Input validation schema
+const conversationMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().max(5000)
+});
+
+const requestSchema = z.object({
+  message: z.string().max(2000).optional(),
+  verdict_text: z.string().max(50000).optional(),
+  verdict: z.string().max(50000).optional(),
+  verdict_type: z.string().max(50).optional(),
+  verdictType: z.string().max(50).optional(),
+  idea_problem: z.string().max(15000).optional(),
+  conversationHistory: z.array(conversationMessageSchema).max(50).optional(),
+  isFirstMessage: z.boolean().optional()
+}).strict();
+
+// Allowed origins
+const ALLOWED_ORIGINS = [
+  "https://ideaverdict.in",
+  "https://www.ideaverdict.in",
+  "https://lovable.dev",
+  "https://ideaverdictin.lovable.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
+  /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
+  /^https:\/\/[a-z0-9-]+-preview--[a-z0-9-]+\.lovable\.app$/,
+];
+
+const isOriginAllowed = (origin: string): boolean => {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
+};
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const isAllowed = isOriginAllowed(origin);
+  
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+  };
+};
+
+const getClientIP = (req: Request): string => {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+         req.headers.get("x-real-ip") ||
+         req.headers.get("cf-connecting-ip") ||
+         "unknown";
+};
+
+const sanitizeText = (text: string): string => {
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
+};
+
+// ============================================================================
+// PROMPT BUILDER
+// ============================================================================
 
 const buildSystemPrompt = (
   ideaProblem: string,
@@ -24,10 +120,10 @@ ${fullEvaluation}
 
 YOUR ROLE:
 - Answer questions about this specific evaluation conversationally and helpfully
-- Reference specific parts of the evaluation when relevant (e.g., "Looking at the Target User section...")
+- Reference specific parts of the evaluation when relevant
 - Quote actual reasoning from the evaluation to back up your points
 - Be conversational, not robotic - use a friendly, helpful tone
-- Ask clarifying questions when needed (e.g., "Are you asking about technical feasibility or market viability?")
+- Ask clarifying questions when needed
 - Keep responses concise (2-3 paragraphs max)
 
 STRICT RULES:
@@ -43,6 +139,7 @@ Remember: Be helpful and conversational, like a knowledgeable friend explaining 
 const parseScoreFromEvaluation = (fullEvaluation: string): string => {
   const patterns = [
     /idea\s*strength[:\s]*(\d+)%/i,
+    /viability\s*score[:\s]*(\d+)%?/i,
     /score[:\s]*(\d+)%/i,
     /(\d+)%\s*(?:idea\s*)?strength/i,
   ];
@@ -54,26 +151,81 @@ const parseScoreFromEvaluation = (fullEvaluation: string): string => {
   return "N/A";
 };
 
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
+
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
-    const body = await req.json();
+    const clientIP = getClientIP(req);
     
-    const message = body.message?.trim() || "";
+    // Rate limiting
+    const rateLimit = checkRateLimit(`ip:${clientIP}`, MAX_REQUESTS_PER_WINDOW_IP);
+    if (!rateLimit.allowed) {
+      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please try again later.",
+          retryAfter: Math.ceil(rateLimit.resetIn / 1000)
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000))
+          } 
+        }
+      );
+    }
+
+    // Parse and validate request
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const parseResult = requestSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => `${e.path.join(".")}: ${e.message}`);
+      console.warn("Validation failed:", errors);
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body = parseResult.data;
+    
+    const message = sanitizeText(body.message || "");
     const verdictText = body.verdict_text || body.verdict || "";
     const verdictType = body.verdict_type || body.verdictType || "UNKNOWN";
-    const ideaProblem = body.idea_problem || "";
+    const ideaProblem = sanitizeText(body.idea_problem || "");
     const conversationHistory = body.conversationHistory || [];
     const isFirstMessage = body.isFirstMessage || false;
 
-    console.log("VERDICT CHAT PAYLOAD", { 
-      message, 
-      verdictType, 
+    console.log("Chat request:", { 
+      messageLength: message.length,
       hasVerdictText: !!verdictText,
-      hasIdeaProblem: !!ideaProblem,
+      historyLength: conversationHistory.length,
       isFirstMessage 
     });
 
@@ -94,43 +246,40 @@ serve(async (req) => {
       );
     }
 
-    // Parse score from evaluation
     const score = parseScoreFromEvaluation(verdictText);
-
-    // Build system prompt with full context
     const systemPrompt = buildSystemPrompt(ideaProblem, verdictType, score, verdictText);
 
-    // Build messages
     const messages: { role: string; content: string }[] = [
       { role: "system", content: systemPrompt },
     ];
     
-    // Add conversation history
+    // Add sanitized conversation history
     if (Array.isArray(conversationHistory)) {
       for (const msg of conversationHistory) {
         if (msg.role && msg.content) {
-          messages.push({ role: msg.role, content: msg.content });
+          messages.push({ 
+            role: msg.role, 
+            content: sanitizeText(msg.content).substring(0, 5000) 
+          });
         }
       }
     }
 
-    // For first message, generate the greeting
     if (isFirstMessage) {
       const verdictLabel = verdictType === "build" ? "BUILD" : 
                           verdictType === "narrow" ? "NARROW" : "DO NOT BUILD";
       messages.push({ 
         role: "user", 
-        content: `Generate a brief, friendly greeting introducing yourself and the evaluation result. The verdict is ${verdictLabel} with a score of ${score}%. Invite them to ask questions about any part of the evaluation. Keep it to 2-3 sentences, be conversational.` 
+        content: `Generate a brief, friendly greeting introducing yourself and the evaluation result. The verdict is ${verdictLabel} with a score of ${score}%. Invite them to ask questions. Keep it to 2-3 sentences.` 
       });
     } else {
-      // Validate minimum message length for user messages
       if (message.length < 3) {
         return new Response(
           JSON.stringify({ response: "Please ask a more detailed question (at least 3 characters)." }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      messages.push({ role: "user", content: message });
+      messages.push({ role: "user", content: message.substring(0, 2000) });
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -178,13 +327,19 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ response: assistantResponse }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/json",
+          "X-RateLimit-Remaining": String(rateLimit.remaining)
+        } 
+      }
     );
   } catch (error) {
     console.error("Error in verdict-assistant:", error);
     return new Response(
       JSON.stringify({ error: "Chat unavailable. Please try again." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

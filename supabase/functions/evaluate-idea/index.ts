@@ -2,15 +2,68 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-// Input validation schema - projectType is context only, everything else is evaluated
+// ============================================================================
+// SECURITY CONFIGURATION
+// ============================================================================
+
+// Rate limiting configuration (per IP and per user)
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute window
+const MAX_REQUESTS_PER_WINDOW_IP = 10; // 10 requests per minute per IP
+const MAX_REQUESTS_PER_WINDOW_USER = 20; // 20 requests per minute per authenticated user
+
+// In-memory rate limit store (resets on function cold start)
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+// Rate limiter function
+const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
+  const now = Date.now();
+  const record = rateLimitStore.get(key);
+  
+  // Clean up expired entries periodically
+  if (rateLimitStore.size > 10000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (v.resetAt < now) rateLimitStore.delete(k);
+    }
+  }
+  
+  if (!record || record.resetAt < now) {
+    // New window
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1, resetIn: RATE_LIMIT_WINDOW_MS };
+  }
+  
+  if (record.count >= maxRequests) {
+    return { allowed: false, remaining: 0, resetIn: record.resetAt - now };
+  }
+  
+  record.count++;
+  return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetAt - now };
+};
+
+// Input validation schema with strict limits and sanitization
 const evaluateSchema = z.object({
-  projectType: z.string().max(100).optional(),
-  problem: z.string().min(1).max(15000),
-  solution: z.string().max(15000).optional().default(""),
-  targetUsers: z.string().min(1).max(15000),
-  differentiation: z.string().max(15000).optional().default(""),
-  workflow: z.string().max(20000).optional(),
-});
+  projectType: z.string()
+    .min(1, "Project type is required")
+    .max(50, "Project type too long")
+    .regex(/^[a-zA-Z\s\-\/]+$/, "Project type contains invalid characters"),
+  problem: z.string()
+    .min(20, "Problem description too short")
+    .max(10000, "Problem description exceeds 10,000 characters"),
+  solution: z.string()
+    .max(10000, "Solution exceeds 10,000 characters")
+    .optional()
+    .default(""),
+  targetUsers: z.string()
+    .min(10, "Target users description too short")
+    .max(10000, "Target users exceeds 10,000 characters"),
+  differentiation: z.string()
+    .max(10000, "Differentiation exceeds 10,000 characters")
+    .optional()
+    .default(""),
+  workflow: z.string()
+    .max(15000, "Workflow exceeds 15,000 characters")
+    .optional(),
+}).strict(); // Reject any unexpected fields
 
 // Fixed category set for classification
 const IDEA_CATEGORIES = [
@@ -21,48 +74,59 @@ const IDEA_CATEGORIES = [
   "Service / Other",
 ] as const;
 
-// Execution modes for internal evaluation adjustment
-const EXECUTION_MODES = [
-  "Indie / Micro-SaaS",
-  "Venture / Hard Tech",
-] as const;
+// Allowed origins for CORS (whitelist approach)
+const ALLOWED_ORIGINS = [
+  "https://ideaverdict.in",
+  "https://www.ideaverdict.in",
+  "https://lovable.dev",
+  "https://ideaverdictin.lovable.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
-// CORS headers with origin validation
-const getAllowedOrigins = () => {
-  return [
-    "https://ideaverdict.in",
-    "https://www.ideaverdict.in",
-    "https://lovable.dev",
-    "https://ideaverdictin.lovable.app",
-    "https://*.lovable.app",
-    "https://*.lovableproject.com",
-    "http://localhost:5173",
-    "http://localhost:3000",
-  ];
+// Pattern-based origins (for *.lovable.app, etc.)
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
+  /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
+  /^https:\/\/[a-z0-9-]+-preview--[a-z0-9-]+\.lovable\.app$/,
+];
+
+const isOriginAllowed = (origin: string): boolean => {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
 };
 
 const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
-  const allowedOrigins = getAllowedOrigins();
-  
-  console.log("Request origin:", origin);
-  
-  const isAllowed = allowedOrigins.some(allowed => {
-    if (allowed.includes("*")) {
-      const pattern = allowed.replace("*", ".*");
-      return new RegExp(`^${pattern}$`).test(origin);
-    }
-    return allowed === origin;
-  });
-  
-  console.log("Origin allowed:", isAllowed);
+  const isAllowed = isOriginAllowed(origin);
   
   return {
-    "Access-Control-Allow-Origin": isAllowed ? origin : "*",
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400", // Cache preflight for 24 hours
   };
 };
+
+// Helper to extract client IP
+const getClientIP = (req: Request): string => {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+         req.headers.get("x-real-ip") ||
+         req.headers.get("cf-connecting-ip") ||
+         "unknown";
+};
+
+// Sanitize text input (remove potential injection patterns)
+const sanitizeText = (text: string): string => {
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
+    .trim();
+};
+
+// ============================================================================
+// EVALUATION PROMPTS
+// ============================================================================
 
 // Get system prompt for STARTUP evaluation (business-focused)
 const getStartupSystemPrompt = () => {
@@ -151,45 +215,6 @@ Score 30-49: Weak or unclear monetization ("we'll figure it out later", complex 
 Score 0-29: No viable business model ("just get users first", giving away value with no path to revenue)
 
 ━━━━━━━━━━━━━━━━━━
-PROJECT TYPE CLASSIFICATION
-━━━━━━━━━━━━━━━━━━
-
-Classify into ONE primary type:
-1. B2B SaaS - Software sold to businesses (subscription model)
-2. B2C SaaS - Software sold to consumers (subscription/freemium)
-3. Marketplace - Two-sided platform connecting buyers and sellers
-4. E-commerce - Selling physical/digital products directly
-5. Service Business - Providing services (agency, consulting)
-6. Hardware - Physical products or hardware+software combo
-7. AI/ML Product - AI-powered tool or service
-8. Developer Tool - Tools for developers/technical users
-9. Content/Media - Content creation, publishing, media platform
-10. Mobile App - Mobile-first consumer application
-11. Fintech - Financial services or payment product
-12. Health Tech - Healthcare, fitness, wellness product
-13. Education - Learning, training, education platform
-14. Productivity - Tools for productivity, organization, workflow
-15. Social/Community - Social network or community platform
-16. Enterprise - Large enterprise-focused solution
-17. Local/Regional - Location-based or local service
-18. Gaming - Games or gaming-adjacent product
-19. Other - Doesn't fit standard categories
-
-━━━━━━━━━━━━━━━━━━
-EVALUATION LENS MODIFIERS
-━━━━━━━━━━━━━━━━━━
-
-Indie / Micro-SaaS Lens:
-- Boost: Low execution difficulty (+10%), Solo-founder-friendly (+10%), Fast to market (+5%)
-- Penalize: Requires network effects (-15%), Needs large team (-20%), High CAC required (-10%)
-- Ideal Range: 60-85% (Most indie ideas shouldn't score 90%+ as they're deliberately small)
-
-VC-Backed / High-Growth Lens:
-- Boost: Huge TAM (+15%), Network effects (+15%), Winner-take-all dynamics (+10%)
-- Penalize: Small market (-20%), Linear scaling only (-15%), Lifestyle business dynamics (-10%)
-- Ideal Range: 40-95% (Higher variance, most shouldn't get funded)
-
-━━━━━━━━━━━━━━━━━━
 SCORING ALGORITHM
 ━━━━━━━━━━━━━━━━━━
 
@@ -198,12 +223,7 @@ SCORING ALGORITHM
 
 2. Apply Lens Modifiers: Adjust based on lens-specific factors
 
-3. Reality Check:
-   - If score >85%, ask: "Would this get funded by YC/a16z?"
-   - If score <25%, ask: "Is there ANY redeeming quality?"
-   - If score is 35-45%, strongly consider pushing it lower or higher (avoid the dead zone)
-
-4. Assign Verdict (STRICT - NON-NEGOTIABLE):
+3. Assign Verdict (STRICT - NON-NEGOTIABLE):
    - >65%: BUILD - Strong signal to pursue immediately
    - 41-65%: NARROW - Has potential but needs focus/pivoting
    - 31-40%: RETHINK - Significant flaws, major changes needed
@@ -219,130 +239,46 @@ All section titles must be written in ALL CAPS on their own line.
 Use colons (:) and dashes (-) to separate points for readability.
 No emojis except verdict indicators.
 
-VIABILITY SCORE
-[X]
+VIABILITY SCORE: [X]
 
-VERDICT
-[BUILD / NARROW / RETHINK / DO NOT BUILD]
-[One powerful sentence capturing the core verdict - make it memorable and direct]
+VERDICT: [BUILD / NARROW / RETHINK / DO NOT BUILD]
+[One powerful sentence capturing the core verdict]
 
-PROJECT TYPE
-[Primary Type] - Sub-category: [Specific niche]
-[One sentence explaining why this classification fits]
+DETECTED CATEGORY: [Category from list]
 
-DETECTED CATEGORY
-[Category from the list above]
-
-EXECUTION DIFFICULTY (MANDATORY - must always be assessed)
-[EASY / MEDIUM / HARD]
-Assessment factors: technical complexity, integrations required, regulatory burden, external dependencies, team specialization needed
+EXECUTION DIFFICULTY: [EASY / MEDIUM / HARD]
 [One sentence justification]
-Estimated team size: [X people]
-Estimated timeline: [X weeks/months]
 
 KEY STRENGTHS
-1. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
-2. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
-3. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
+1. [Strength Title]: [Explanation - 2-3 sentences]
+2. [Strength Title]: [Explanation - 2-3 sentences]
+3. [Strength Title]: [Explanation - 2-3 sentences]
 
 CRITICAL WEAKNESSES
-1. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
-2. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
-3. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
+1. [Weakness Title]: [Explanation - 2-3 sentences]
+2. [Weakness Title]: [Explanation - 2-3 sentences]
+3. [Weakness Title]: [Explanation - 2-3 sentences]
 
 REALITY CHECK
-[3-4 sentences of brutally honest assessment answering:
-- What's the single biggest reason this could fail?
-- What assumption is the founder making that's probably wrong?
-- What does the founder not know that they desperately need to learn?
-- If you had to bet $10k of your own money on this, would you? Why or why not?]
-
-SIMILAR PROJECTS AND COMPETITORS
-
-Direct Competitors:
-1. [Company Name] ([website]) - [How they're similar - 1 sentence]
-2. [Company Name] ([website]) - [How they're similar - 1 sentence]
-3. [Company Name] ([website]) - [How they're similar - 1 sentence]
-
-Adjacent/Inspirational:
-- [Company Name] ([website]) - [What to learn from them - 1 sentence]
-- [Company Name] ([website]) - [What to learn from them - 1 sentence]
-
-Why they matter: [2 sentences explaining what these competitors prove about the market and what the founder should learn from them]
+[3-4 sentences of brutally honest assessment]
 
 THE HARSH TRUTH
-[3-5 sentences of the absolute truth the founder needs to hear but probably doesn't want to. Be specific, direct, and actionable. This should sting but be helpful. Examples:
-- "Your idea is just [competitor] with a prettier interface - that's not enough."
-- "You're solving a problem that only exists in your imagination."
-- "This market is a graveyard of failed startups - you need an unfair advantage to survive."
-- "You're underestimating execution difficulty by at least 5x."
-- "No one will pay for this when free alternatives exist."]
+[3-5 sentences of the absolute truth the founder needs to hear]
 
 WHAT YOU MUST DO TO IMPROVE
-
 Immediate Actions (This Week):
-1. [Specific Action]: [Exactly what to do and why - 2 sentences]
-2. [Specific Action]: [Exactly what to do and why - 2 sentences]
-3. [Specific Action]: [Exactly what to do and why - 2 sentences]
-
-Short-term Focus (Next 30 Days):
-1. [Specific Goal]: [What success looks like - 2 sentences]
-2. [Specific Goal]: [What success looks like - 2 sentences]
-
-Long-term Strategy (3-6 Months):
-1. [Strategic Shift]: [The big change needed - 2 sentences]
-
-Pivot Suggestions (if score <70%):
-- Option 1: [Specific pivot direction - why it's better - 2 sentences]
-- Option 2: [Alternative pivot direction - why it's better - 2 sentences]
+1. [Specific Action]: [Explanation]
+2. [Specific Action]: [Explanation]
+3. [Specific Action]: [Explanation]
 
 FACTOR BREAKDOWN
+Market Opportunity: [X]/100 - [One sentence]
+Problem-Solution Fit: [X]/100 - [One sentence]
+Competitive Moat: [X]/100 - [One sentence]
+Execution Reality: [X]/100 - [One sentence]
+Business Model: [X]/100 - [One sentence]
 
-Market Opportunity: [X]/100 - [One sentence: What's right/wrong with the market]
-Problem-Solution Fit: [X]/100 - [One sentence: How well does this solve the problem]
-Competitive Moat: [X]/100 - [One sentence: What's defensible here]
-Execution Reality: [X]/100 - [One sentence: How hard is this to build]
-Business Model: [X]/100 - [One sentence: How will you make money]
-
-Overall Assessment: [2-3 sentences synthesizing the scores and explaining the final verdict]
-
-━━━━━━━━━━━━━━━━━━
-CRITICAL RULES (NEVER VIOLATE)
-━━━━━━━━━━━━━━━━━━
-
-1. No Default Scores: Every idea MUST be evaluated independently. Scores clustering around one number means you're broken.
-
-2. Use Full Range: Distribute scores across 0-100. Most ideas should fall in 40-70% range. <30% and >85% should be rare.
-
-3. Be Brutally Honest: Founders need truth, not encouragement. If an idea is bad, say so clearly in "The Harsh Truth" section.
-
-4. Specificity Wins: Never say "improve marketing" - say "Run 10 customer interviews in week 1 to validate problem severity"
-
-5. Context is King: Same idea can be 85% for indie founders and 45% for VC-backing. Apply lens correctly.
-
-6. Find Real Competitors: Always list 3-5 actual competitors with real websites. If you can't find any, that's either a red flag (no market) or an opportunity (untapped market).
-
-7. Make "Harsh Truth" Sting: This section should be uncomfortable but helpful. Don't hold back.
-
-8. Actionable Steps Only: Every action item must be specific enough that someone could do it today.
-
-9. Compare to Reality: Constantly ask "How does this compare to [successful company] at their start?"
-
-10. No Participation Trophies: Don't inflate scores to be nice. 50% is not the middle - it's "this probably won't work."
-
-━━━━━━━━━━━━━━━━━━
-CALIBRATION REFERENCE
-━━━━━━━━━━━━━━━━━━
-
-Score 95% - Stripe in 2010: Payments broken, huge TAM, developers hated existing options, first to nail developer experience
-Score 82% - Notion in 2016: Knowledge management huge but crowded, existing tools fragmented, network effects + design
-Score 68% - Yet another project management tool: Large but saturated market, incremental improvement only, easily copied
-Score 45% - AI-powered horoscope app: Niche, limited willingness to pay, entertainment not real problem, no defensibility
-Score 18% - Social network for left-handed people: Tiny market, not a real problem, no monetization path
-
-Your Mission: Every evaluation could save or make a founder's career. Be the honest friend who tells them the truth, not the polite acquaintance who says "sounds interesting" to everything.
-
-Remember: A harsh truth today saves months of wasted effort tomorrow. Your job is to be RIGHT, not to be NICE.`;
+Remember: Be RIGHT, not NICE. A harsh truth today saves months of wasted effort tomorrow.`;
 };
 
 // Get system prompt for PROJECT evaluation (non-business, impact-focused)
@@ -366,356 +302,285 @@ PROJECT EVALUATION FRAMEWORK
 How well-designed, robust, and sound is the solution?
 
 Score 90-100: Elegant architecture, innovative technical approach, handles edge cases, scalable design, demonstrates deep expertise
-Score 70-89: Solid technical implementation, good design patterns, reliable and maintainable code
-Score 50-69: Functional but basic implementation, some technical debt, works but not optimized
-Score 30-49: Weak technical foundation, buggy or fragile, poor architecture decisions
-Score 0-29: Broken, non-functional, or fundamentally flawed technical approach
-
-Key Questions:
-- Is the technical approach appropriate for the problem?
-- Does the solution handle real-world conditions and edge cases?
-- Is the code/system well-structured and maintainable?
-- Does it demonstrate technical competence and learning?
+Score 70-89: Solid technical implementation, good design patterns, reasonable complexity handling
+Score 50-69: Functional but basic implementation, some technical debt or shortcuts
+Score 30-49: Weak technical foundation, significant gaps, prone to issues
+Score 0-29: Poor technical design, fundamental flaws, unlikely to work reliably
 
 2. IMPACT & SIGNIFICANCE (Weight: 25%)
-What problem does this solve and how meaningful is that contribution?
+What problem does it solve and how meaningful is the contribution?
 
-Score 90-100: Addresses a critical issue affecting many lives, potential to create lasting positive change, novel solution to important problem
-Score 70-89: Solves a real problem for a meaningful group of beneficiaries, clear positive impact visible
-Score 50-69: Helpful but incremental improvement, addresses a moderate need
-Score 30-49: Marginal benefit, solves a minor inconvenience, limited significance
-Score 0-29: No clear problem solved, impact unclear or non-existent
-
-Key Questions:
-- Who benefits from this and how much does it help them?
-- Is this solving a real problem or an imagined one?
-- What changes in people's lives because this exists?
-- How significant is the contribution to the field or community?
+Score 90-100: Addresses a critical need, could significantly improve lives, high societal value
+Score 70-89: Solves a real problem for a meaningful group, clear positive impact
+Score 50-69: Helpful but incremental improvement, moderate significance
+Score 30-49: Marginal impact, "nice to have" but not essential
+Score 0-29: Trivial problem or no clear beneficiaries
 
 3. SCALE & REACH (Weight: 20%)
-How many people can benefit from this solution?
+How many people can benefit from this?
 
-Score 90-100: Can help millions of beneficiaries, addresses universal human needs, globally applicable
-Score 70-89: Can reach tens of thousands, addresses common problems, broad applicability
-Score 50-69: Hundreds to low thousands of potential beneficiaries, useful within a specific community
-Score 30-49: Limited to a small group (dozens), highly localized or niche
-Score 0-29: Benefits only the creator or a handful of people
-
-Key Questions:
-- How many people could realistically use or benefit from this?
-- Is this applicable beyond the immediate context?
-- Can it be adapted for different communities or regions?
+Score 90-100: Potential to help millions, universal applicability
+Score 70-89: Can reach thousands to hundreds of thousands of beneficiaries
+Score 50-69: Useful for hundreds to thousands of people in a specific context
+Score 30-49: Limited to a small group or very niche application
+Score 0-29: Only useful to the creator or a handful of people
 
 4. USEFULNESS & PRACTICALITY (Weight: 15%)
-How practical and applicable is the solution in real-world conditions?
+How practical and applicable is the solution in the real world?
 
-Score 90-100: Ready for immediate real-world deployment, requires minimal resources, intuitive to use
-Score 70-89: Practical with minor adjustments, reasonable resource requirements, learnable
-Score 50-69: Needs some adaptation for real use, moderate barriers to adoption
-Score 30-49: Theoretical or prototype-only, significant practical barriers
-Score 0-29: Impractical, requires impossible resources, or purely academic exercise
-
-Key Questions:
-- Can real people actually use this in their daily lives?
-- What resources or infrastructure does it require?
-- How easy is it to adopt and learn?
+Score 90-100: Immediately useful, addresses real workflows, high adoption potential
+Score 70-89: Practical with minor adjustments, clear use cases
+Score 50-69: Useful in theory but may face adoption challenges
+Score 30-49: Questionable practicality, requires significant behavior change
+Score 0-29: Impractical or purely theoretical
 
 5. INNOVATION & CREATIVITY (Weight: 10%)
 How novel and creative is the approach?
 
-Score 90-100: Breakthrough thinking, truly original approach, advances the state of the art
-Score 70-89: Creative combination of existing ideas, fresh perspective on the problem
-Score 50-69: Some novel elements but largely uses established approaches
-Score 30-49: Mostly replicating existing solutions with minor tweaks
-Score 0-29: Direct copy of existing work, no original contribution
-
-Key Questions:
-- What's new or different about this approach?
-- Does it offer a fresh perspective or novel solution?
-- Does it advance knowledge or practice in the field?
+Score 90-100: Groundbreaking approach, first-of-its-kind solution
+Score 70-89: Creative combination of existing ideas, fresh perspective
+Score 50-69: Some novel elements but mostly familiar approaches
+Score 30-49: Derivative, mostly copies existing solutions
+Score 0-29: No innovation, exact copy of existing work
 
 6. FEASIBILITY (Weight: 5%)
 Can this be completed with available resources and time?
 
-Score 90-100: Can be built by a student/individual with basic resources in reasonable time
-Score 70-89: Achievable with typical project resources and timeline
-Score 50-69: Challenging but possible with dedicated effort
-Score 30-49: Requires resources beyond typical student/individual access
-Score 0-29: Unrealistic given constraints, requires extraordinary resources
+Score 90-100: Easily achievable, clear path to completion
+Score 70-89: Achievable with reasonable effort and resources
+Score 50-69: Challenging but possible with dedication
+Score 30-49: Very difficult, may require resources beyond reach
+Score 0-29: Likely impossible given constraints
 
 ━━━━━━━━━━━━━━━━━━
-PROJECT TYPE CLASSIFICATION
+REQUIRED OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━
 
-Classify into ONE primary type:
-1. Academic Research - Original research or study contribution
-2. Engineering Project - Hardware, software, or systems building
-3. Social Impact - Projects addressing social issues
-4. Educational Tool - Learning aids, tutorials, educational platforms
-5. Healthcare/Medical - Health, wellness, medical applications
-6. Environmental - Sustainability, conservation, environmental projects
-7. Community Service - Tools or solutions for community benefit
-8. Creative/Artistic - Design, art, media projects with technical elements
-9. Scientific - Science experiments, data analysis, scientific tools
-10. Civic Tech - Government, civic participation, public service tools
-11. Accessibility - Solutions for people with disabilities
-12. Agriculture/Food - Farming, food systems, nutrition projects
-13. Other - Projects that don't fit above categories
+VIABILITY SCORE: [X]
 
-━━━━━━━━━━━━━━━━━━
-SCORING ALGORITHM
-━━━━━━━━━━━━━━━━━━
+VERDICT: [BUILD / NARROW / RETHINK / DO NOT BUILD]
+[One powerful sentence about the project's potential]
 
-1. Calculate Base Score:
-   Base Score = (Technical Strength x 0.25) + (Impact & Significance x 0.25) + (Scale & Reach x 0.20) + (Usefulness & Practicality x 0.15) + (Innovation & Creativity x 0.10) + (Feasibility x 0.05)
+DETECTED CATEGORY: [SaaS / Tool | Marketplace | AI Product | Content / Community | Service / Other]
 
-2. Reality Check:
-   - Does this project demonstrate genuine effort and learning?
-   - Will anyone actually use or benefit from this?
-   - Is the scope appropriate for a project (not a company)?
-
-3. Assign Verdict (STRICT - NON-NEGOTIABLE):
-   - >65%: BUILD - Strong project worth pursuing
-   - 41-65%: NARROW - Good potential but needs refinement
-   - 31-40%: RETHINK - Significant improvements needed
-   - 0-30%: KILL (output as "DO NOT BUILD") - Fundamentally flawed approach
-
-━━━━━━━━━━━━━━━━━━
-REQUIRED OUTPUT FORMAT (Follow EXACTLY)
-━━━━━━━━━━━━━━━━━━
-
-Do NOT use markdown. Do NOT use **, *, __, or any formatting symbols.
-Output must be plain text only.
-All section titles must be written in ALL CAPS on their own line.
-
-VIABILITY SCORE
-[X]
-
-VERDICT
-[BUILD / NARROW / RETHINK / DO NOT BUILD]
-[One powerful sentence capturing the core verdict - make it memorable and direct]
-
-PROJECT TYPE
-[Primary Type from classification above]
-[One sentence explaining why this classification fits]
-
-DETECTED CATEGORY
-[Category from the list above]
-
-EXECUTION DIFFICULTY (MANDATORY - must always be assessed)
-[EASY / MEDIUM / HARD]
-Assessment factors: technical complexity, resources required, skills needed, time commitment
+EXECUTION DIFFICULTY: [EASY / MEDIUM / HARD]
 [One sentence justification]
-Estimated team size: [X people]
-Estimated timeline: [X weeks/months]
 
 KEY STRENGTHS
-1. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
-2. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
-3. [Strength Title]: [Specific explanation with evidence or reasoning - 2-3 sentences]
+1. [Strength]: [Explanation]
+2. [Strength]: [Explanation]
+3. [Strength]: [Explanation]
 
-CRITICAL WEAKNESSES
-1. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
-2. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
-3. [Weakness Title]: [Specific explanation of the problem and why it matters - 2-3 sentences]
+AREAS FOR IMPROVEMENT
+1. [Area]: [Constructive feedback]
+2. [Area]: [Constructive feedback]
+3. [Area]: [Constructive feedback]
 
-REALITY CHECK
-[3-4 sentences of honest assessment answering:
-- What's the single biggest challenge to making this work?
-- What assumption might be wrong?
-- What skill or knowledge gap needs to be addressed?
-- Would you use this project yourself? Why or why not?]
+IMPACT ASSESSMENT
+[3-4 sentences on who benefits and how]
 
-SIMILAR PROJECTS AND INSPIRATION
-
-Existing Solutions:
-1. [Project/Tool Name] - [How it's similar - 1 sentence]
-2. [Project/Tool Name] - [How it's similar - 1 sentence]
-3. [Project/Tool Name] - [How it's similar - 1 sentence]
-
-Inspirational Examples:
-- [Project Name] - [What to learn from it - 1 sentence]
-- [Project Name] - [What to learn from it - 1 sentence]
-
-What you can learn: [2 sentences explaining what these examples teach and how to differentiate]
-
-THE HONEST TRUTH
-[3-5 sentences of honest feedback the creator needs to hear. Be specific, direct, and actionable. Focus on:
-- Is this actually useful to anyone?
-- What's the real impact potential?
-- What technical or design improvements are critical?
-- Is the scope realistic for a project?]
-
-WHAT YOU MUST DO TO IMPROVE
-
-Immediate Actions (This Week):
-1. [Specific Action]: [Exactly what to do and why - 2 sentences]
-2. [Specific Action]: [Exactly what to do and why - 2 sentences]
-3. [Specific Action]: [Exactly what to do and why - 2 sentences]
-
-Short-term Focus (Next 30 Days):
-1. [Specific Goal]: [What success looks like - 2 sentences]
-2. [Specific Goal]: [What success looks like - 2 sentences]
-
-Scope Suggestions (if needed):
-- [How to narrow or expand scope appropriately - 2 sentences]
+RECOMMENDATIONS
+1. [Recommendation]: [Why and how]
+2. [Recommendation]: [Why and how]
+3. [Recommendation]: [Why and how]
 
 FACTOR BREAKDOWN
+Technical Strength: [X]/100 - [One sentence]
+Impact & Significance: [X]/100 - [One sentence]
+Scale & Reach: [X]/100 - [One sentence]
+Usefulness & Practicality: [X]/100 - [One sentence]
+Innovation & Creativity: [X]/100 - [One sentence]
+Feasibility: [X]/100 - [One sentence]
 
-Technical Strength: [X]/100 - [One sentence about technical quality]
-Impact & Significance: [X]/100 - [One sentence about the importance of the problem]
-Scale & Reach: [X]/100 - [One sentence about how many benefit]
-Usefulness & Practicality: [X]/100 - [One sentence about real-world applicability]
-Innovation & Creativity: [X]/100 - [One sentence about novelty]
-Feasibility: [X]/100 - [One sentence about achievability]
-
-Overall Assessment: [2-3 sentences synthesizing the scores and explaining the final verdict]
-
-━━━━━━━━━━━━━━━━━━
-CRITICAL RULES (NEVER VIOLATE)
-━━━━━━━━━━━━━━━━━━
-
-1. NO BUSINESS LANGUAGE: Never mention revenue, monetization, customers, TAM, market size, LTV/CAC, pricing, business model, competition, moat, defensibility, or investment.
-
-2. Focus on BENEFICIARIES not customers: Who is helped, not who pays.
-
-3. Focus on IMPACT not revenue: What changes in the world, not what money is made.
-
-4. Focus on CONTRIBUTION not market share: What value is added, not what is captured.
-
-5. Learning is Valid: Technical growth and skill development count as success for projects.
-
-6. Scope Appropriately: Projects should be judged on project-scale ambition, not startup-scale ambition.
-
-7. Be Encouraging but Honest: Students and individuals need constructive feedback, not discouragement.
-
-8. Actionable Feedback: Every suggestion should be something that can be done within project constraints.
-
-9. Celebrate Innovation: Novel approaches and creative solutions deserve recognition.
-
-10. Practical Over Perfect: Working solutions that help people beat impressive but theoretical projects.
-
-Remember: Your job is to help project creators improve their work and maximize real-world impact. Focus on learning, contribution, and practical benefit.`;
+Focus on constructive feedback. These are learning projects - be honest but encouraging.`;
 };
+
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
-  
+
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    // Verify user authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
+  // Only allow POST
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+  }
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      console.error("Auth error:", authError);
+  try {
+    const clientIP = getClientIP(req);
+    
+    // Check IP-based rate limit first
+    const ipRateLimit = checkRateLimit(`ip:${clientIP}`, MAX_REQUESTS_PER_WINDOW_IP);
+    if (!ipRateLimit.allowed) {
+      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please try again later.",
+          retryAfter: Math.ceil(ipRateLimit.resetIn / 1000)
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(ipRateLimit.resetIn / 1000)),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(Math.ceil(Date.now() / 1000 + ipRateLimit.resetIn / 1000))
+          } 
+        }
       );
     }
 
-    console.log("Authenticated user:", user.id);
-
-    // Parse and validate input
-    const rawBody = await req.json();
-    console.log("EVALUATION PAYLOAD", rawBody);
-    const parseResult = evaluateSchema.safeParse(rawBody);
-    
-    if (!parseResult.success) {
-      console.error("Validation failed:", parseResult.error.flatten());
+    // Parse and validate request body
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten() }),
+        JSON.stringify({ error: "Invalid JSON in request body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { projectType, problem, solution, targetUsers, differentiation, workflow } = parseResult.data;
-    
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Validate with Zod schema (strict mode rejects unexpected fields)
+    const parseResult = evaluateSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => `${e.path.join(".")}: ${e.message}`);
+      console.warn("Validation failed:", errors);
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: errors }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Determine which evaluation mode to use based on project type
-    const isProjectMode = projectType?.toLowerCase() === "project";
-    const isStartupMode = !isProjectMode; // Default to startup mode
-    
-    console.log(`Evaluation mode: ${isProjectMode ? "PROJECT" : "STARTUP"}`);
-    
-    // Get the appropriate system prompt based on evaluation mode
-    const systemPrompt = isProjectMode ? getProjectSystemPrompt() : getStartupSystemPrompt();
+    const validatedData = parseResult.data;
 
-    let userPrompt = isProjectMode 
-      ? `Evaluate this project (NOT a business/startup):`
-      : `Evaluate this startup idea:`;
+    // Sanitize all text inputs
+    const projectType = sanitizeText(validatedData.projectType);
+    const problem = sanitizeText(validatedData.problem);
+    const solution = sanitizeText(validatedData.solution || "");
+    const targetUsers = sanitizeText(validatedData.targetUsers);
+    const differentiation = sanitizeText(validatedData.differentiation || "");
+    const workflow = sanitizeText(validatedData.workflow || "");
 
-    // Include project type context
-    if (projectType) {
+    // Check user-based rate limit if authenticated
+    const authHeader = req.headers.get("authorization");
+    let userId: string | null = null;
+    
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const supabaseClient = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+        );
+        const { data: { user }, error } = await supabaseClient.auth.getUser(
+          authHeader.replace("Bearer ", "")
+        );
+        if (!error && user) {
+          userId = user.id;
+          
+          // User-based rate limit
+          const userRateLimit = checkRateLimit(`user:${userId}`, MAX_REQUESTS_PER_WINDOW_USER);
+          if (!userRateLimit.allowed) {
+            console.warn(`Rate limit exceeded for user: ${userId}`);
+            return new Response(
+              JSON.stringify({ 
+                error: "Rate limit exceeded. Please try again later.",
+                retryAfter: Math.ceil(userRateLimit.resetIn / 1000)
+              }),
+              { 
+                status: 429, 
+                headers: { 
+                  ...corsHeaders, 
+                  "Content-Type": "application/json",
+                  "Retry-After": String(Math.ceil(userRateLimit.resetIn / 1000))
+                } 
+              }
+            );
+          }
+        }
+      } catch (authError) {
+        console.warn("Auth verification failed:", authError);
+        // Continue without user context - will use IP rate limiting
+      }
+    }
+
+    // Log request (without sensitive data)
+    console.log("Evaluation request:", {
+      projectType,
+      problemLength: problem.length,
+      solutionLength: solution.length,
+      targetUsersLength: targetUsers.length,
+      clientIP: clientIP.substring(0, 10) + "...", // Partial IP for privacy
+      userId: userId ? userId.substring(0, 8) + "..." : null
+    });
+
+    // Get API key from environment (never expose to client)
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Service configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Determine evaluation mode based on project type
+    const isStartupMode = projectType.toLowerCase() === "startup";
+    const systemPrompt = isStartupMode ? getStartupSystemPrompt() : getProjectSystemPrompt();
+
+    // Build user prompt
+    let userPrompt = `PROBLEM/IDEA:
+${problem}`;
+
+    if (solution) {
       userPrompt += `
 
-PROJECT TYPE: ${projectType}`;
+PROPOSED SOLUTION:
+${solution}`;
     }
 
     userPrompt += `
 
-PROBLEM/CHALLENGE:
-${problem}
+TARGET ${isStartupMode ? "USERS/CUSTOMERS" : "BENEFICIARIES"}:
+${targetUsers}`;
 
-SOLUTION:
-${solution}
+    if (differentiation) {
+      userPrompt += `
 
-TARGET ${isProjectMode ? "BENEFICIARIES" : "USERS"}:
-${targetUsers}
-
-${isProjectMode ? "UNIQUE APPROACH" : "DIFFERENTIATION"}:
+${isStartupMode ? "DIFFERENTIATION/COMPETITIVE ADVANTAGE" : "UNIQUE ASPECTS"}:
 ${differentiation}`;
+    }
 
     if (workflow) {
       userPrompt += `
 
-WORKFLOW / IMPLEMENTATION:
+WORKFLOW/MECHANISM:
 ${workflow}`;
     }
 
-    if (isProjectMode) {
+    if (!isStartupMode) {
       userPrompt += `
 
-IMPORTANT INSTRUCTIONS:
-1. This is a PROJECT (school, college, conference, or personal), NOT a business.
-2. DO NOT evaluate on business metrics (revenue, market size, monetization, competition, moat).
-3. Focus on: Technical Strength, Impact & Significance, Scale & Reach, Usefulness & Practicality, Innovation & Creativity, Feasibility.
-4. Use language like: beneficiaries, impact, contribution, learning value, practical application.
-5. Provide your verdict following the exact output format.
-
-Remember to include DETECTED CATEGORY, Viability Score, AND Execution Difficulty.`;
-    } else {
-      userPrompt += `
-
-IMPORTANT INSTRUCTIONS:
-1. Classify the idea category
-2. Infer the appropriate execution mode based on the idea's characteristics
-3. Apply mode-specific evaluation criteria
-4. Provide your verdict following the exact output format
-
-Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score, AND Execution Difficulty.`;
+IMPORTANT: This is a PROJECT (school, college, conference, or personal), NOT a business.
+Evaluate on: Technical Strength, Impact & Significance, Scale & Reach, Usefulness & Practicality, Innovation & Creativity, Feasibility.
+Use language like: beneficiaries, impact, contribution, learning value.`;
     }
 
+    userPrompt += `
+
+Provide your complete evaluation following the exact output format.`;
+
+    // Call AI API
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -734,13 +599,13 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
+          JSON.stringify({ error: "Service rate limit. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+          JSON.stringify({ error: "AI credits exhausted." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -756,7 +621,7 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
       throw new Error("No evaluation result received");
     }
 
-    // Parse the DETECTED CATEGORY from the evaluation
+    // Parse evaluation results
     const categoryMatch = evaluationResult.match(/DETECTED CATEGORY:\s*([^\n]+)/i);
     let inferredCategory = "Service / Other";
     if (categoryMatch) {
@@ -769,26 +634,10 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
         inferredCategory = "AI Product";
       } else if (detectedCat.toLowerCase().includes("content") || detectedCat.toLowerCase().includes("community")) {
         inferredCategory = "Content / Community";
-      } else {
-        inferredCategory = "Service / Other";
       }
     }
-    console.log("Inferred category:", inferredCategory);
 
-    // Parse the DETECTED EXECUTION MODE from the evaluation
-    const modeMatch = evaluationResult.match(/DETECTED EXECUTION MODE:\s*([^\n(]+)/i);
-    let inferredExecutionMode = "Indie / Micro-SaaS";
-    if (modeMatch) {
-      const detectedMode = modeMatch[1].trim();
-      if (detectedMode.toLowerCase().includes("venture") || detectedMode.toLowerCase().includes("hard tech")) {
-        inferredExecutionMode = "Venture / Hard Tech";
-      } else {
-        inferredExecutionMode = "Indie / Micro-SaaS";
-      }
-    }
-    console.log("Inferred execution mode:", inferredExecutionMode);
-
-    // Parse the VIABILITY SCORE from the evaluation
+    // Parse viability score
     const scoreMatch = evaluationResult.match(/VIABILITY SCORE:\s*(\d+)%?/i) || 
                        evaluationResult.match(/IDEA STRENGTH SCORE:\s*(\d+)%?/i);
     let viabilityScore: number | null = null;
@@ -799,27 +648,11 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
       }
     }
 
-    // Parse EXECUTION DIFFICULTY (MANDATORY - always assessed)
+    // Parse execution difficulty
     const difficultyMatch = evaluationResult.match(/EXECUTION DIFFICULTY[^:]*:\s*(EASY|MEDIUM|HARD)/i);
-    // Default to MEDIUM if not found (should always be present per prompt)
     const executionDifficulty = difficultyMatch ? difficultyMatch[1].toUpperCase() : "MEDIUM";
 
-    // Parse ASYMMETRIC UPSIDE DETECTED
-    const asymmetricMatch = evaluationResult.match(/ASYMMETRIC UPSIDE DETECTED:\s*(YES|NO)/i);
-    const hasAsymmetricUpside = asymmetricMatch ? asymmetricMatch[1].toUpperCase() === "YES" : false;
-    
-    // Extract asymmetric upside explanation if present
-    let asymmetricUpsideReason = "";
-    if (hasAsymmetricUpside) {
-      const reasonMatch = evaluationResult.match(/ASYMMETRIC UPSIDE DETECTED:\s*YES\s*\n?\(?([^)]+)\)?/i);
-      if (reasonMatch) {
-        asymmetricUpsideReason = reasonMatch[1].trim();
-      }
-    }
-    console.log(`Asymmetric upside: ${hasAsymmetricUpside}${asymmetricUpsideReason ? ` - ${asymmetricUpsideReason}` : ""}`);
-
-    // Deterministic verdict based on viability score (STRICT bands - NON-NEGOTIABLE)
-    // >65: BUILD, 41-65: NARROW, 31-40: RETHINK, 0-30: DO NOT BUILD (KILL)
+    // Determine verdict based on score
     let verdict: string;
     if (viabilityScore !== null) {
       if (viabilityScore > 65) {
@@ -831,22 +664,16 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
       } else {
         verdict = "DO NOT BUILD";
       }
-      console.log(`Deterministic verdict: viability=${viabilityScore}%, difficulty=${executionDifficulty}, category=${inferredCategory}, mode=${inferredExecutionMode} → ${verdict}`);
     } else {
       verdict = "DO NOT BUILD";
       const verdictMatch = evaluationResult.match(/VERDICT:\s*(NARROW|RETHINK|BUILD|DO NOT BUILD|KILL)/i);
       if (verdictMatch) {
         const rawVerdict = verdictMatch[1].toUpperCase();
         verdict = rawVerdict === "KILL" ? "DO NOT BUILD" : rawVerdict;
-      } else if (evaluationResult.includes("NARROW")) {
-        verdict = "NARROW";
-      } else if (evaluationResult.includes("RETHINK")) {
-        verdict = "RETHINK";
-      } else if (/\bVERDICT:?\s*BUILD\b/i.test(evaluationResult)) {
-        verdict = "BUILD";
       }
-      console.log(`Fallback verdict (no score found): ${verdict}`);
     }
+
+    console.log("Evaluation complete:", { verdict, viabilityScore, executionDifficulty, inferredCategory });
 
     return new Response(
       JSON.stringify({
@@ -855,17 +682,20 @@ Remember to include DETECTED CATEGORY, DETECTED EXECUTION MODE, Viability Score,
         viabilityScore,
         executionDifficulty,
         inferredCategory,
-        inferredExecutionMode,
-        hasAsymmetricUpside,
-        asymmetricUpsideReason,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/json",
+          "X-RateLimit-Remaining": String(ipRateLimit.remaining)
+        } 
+      }
     );
   } catch (error) {
     console.error("Evaluation error:", error);
     return new Response(
       JSON.stringify({ error: "An error occurred during evaluation" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
