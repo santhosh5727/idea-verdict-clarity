@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { callGeminiWithFallback, GeminiServiceError } from "../_shared/gemini.ts";
 
 // ============================================================================
 // SECURITY CONFIGURATION
@@ -268,54 +269,32 @@ serve(async (req) => {
     
     console.log("Structure request:", { ideaLength: idea.length, clientIP: clientIP.substring(0, 10) + "..." });
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY is not configured");
-      return new Response(
-        JSON.stringify({ error: "Service configuration error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Call Google Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${SYSTEM_PROMPT}\n\n---\n\nStructure this idea:\n\n${idea}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 1000,
-          responseMimeType: "application/json"
-        }
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
+    // Call Gemini API with automatic fallback
+    let geminiResponse;
+    try {
+      geminiResponse = await callGeminiWithFallback({
+        prompt: `Structure this idea:\n\n${idea}`,
+        systemPrompt: SYSTEM_PROMPT,
+        temperature: 0.5,
+        maxOutputTokens: 1000,
+        responseMimeType: "application/json"
+      });
+      
+      if (geminiResponse.usedFallback) {
+        console.log("Used fallback API key for structuring");
+      }
+    } catch (error) {
+      if (error instanceof GeminiServiceError) {
+        console.error("Gemini service error:", error.message, error.status);
         return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
+          { status: error.status === 429 ? 429 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      throw new Error("AI service error");
+      throw error;
     }
 
-    const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!content) {
-      throw new Error("No content received from AI");
-    }
+    const content = geminiResponse.content;
 
     // Parse the JSON response
     let structured;
@@ -358,7 +337,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Nova error:", error);
     return new Response(
-      JSON.stringify({ error: "Failed to structure idea. Please try again." }),
+      JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }

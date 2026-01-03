@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { callGeminiWithFallback, GeminiServiceError } from "../_shared/gemini.ts";
 
 // ============================================================================
 // SECURITY CONFIGURATION
@@ -585,16 +586,6 @@ serve(async (req) => {
       userId: userId ? userId.substring(0, 8) + "..." : null
     });
 
-    // Get API key from environment
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY is not configured");
-      return new Response(
-        JSON.stringify({ error: "Service configuration error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Determine evaluation mode based on project type
     const isStartupMode = projectType.toLowerCase() === "startup";
     const systemPrompt = isStartupMode ? getStartupSystemPrompt() : getProjectSystemPrompt();
@@ -622,46 +613,32 @@ serve(async (req) => {
 
     userPrompt += `\n\nProvide your complete evaluation as valid JSON only.`;
 
-    // Call Google Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2000,
-          responseMimeType: "application/json"
-        }
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+    // Call Gemini API with automatic fallback
+    let geminiResponse;
+    try {
+      geminiResponse = await callGeminiWithFallback({
+        prompt: userPrompt,
+        systemPrompt: systemPrompt,
+        temperature: 0.7,
+        maxOutputTokens: 2000,
+        responseMimeType: "application/json"
+      });
       
-      if (response.status === 429) {
+      if (geminiResponse.usedFallback) {
+        console.log("Used fallback API key for evaluation");
+      }
+    } catch (error) {
+      if (error instanceof GeminiServiceError) {
+        console.error("Gemini service error:", error.message, error.status);
         return new Response(
-          JSON.stringify({ error: "Service rate limit. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
+          { status: error.status === 429 ? 429 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      throw new Error("AI service error");
+      throw error;
     }
 
-    const data = await response.json();
-    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!rawContent) {
-      throw new Error("No evaluation result received");
-    }
+    const rawContent = geminiResponse.content;
 
     // Parse JSON response
     let evaluationJson;
@@ -709,7 +686,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Evaluation error:", error);
     return new Response(
-      JSON.stringify({ error: "An error occurred during evaluation" }),
+      JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
