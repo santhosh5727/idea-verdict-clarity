@@ -65,11 +65,24 @@ const isOriginAllowed = (origin: string): boolean => {
   return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
 };
 
+// Security headers for all responses (OWASP best practices)
+const getSecurityHeaders = () => ({
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+  "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "Pragma": "no-cache",
+});
+
 const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
   const isAllowed = isOriginAllowed(origin);
   
   return {
+    ...getSecurityHeaders(),
     "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
