@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { callGeminiWithFallback, GeminiServiceError } from "../_shared/gemini.ts";
 
 // ============================================================================
 // SECURITY CONFIGURATION
@@ -305,11 +306,11 @@ serve(async (req) => {
       }
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY_PRIMARY") || Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
       console.error("GEMINI_API_KEY is not configured");
       return new Response(
-        JSON.stringify({ error: "Chat unavailable. Please try again later." }),
+        JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -345,50 +346,31 @@ serve(async (req) => {
       userMessage = message;
     }
 
-    // Call Google Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemPrompt}\n\n---\n\nConversation so far:\n${conversationText}\n\nUser: ${userMessage}` }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 500 // Keep responses short for cost control
-        }
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
+    // Call Gemini API with automatic fallback
+    let geminiResponse;
+    try {
+      geminiResponse = await callGeminiWithFallback({
+        prompt: `Conversation so far:\n${conversationText}\n\nUser: ${userMessage}`,
+        systemPrompt: systemPrompt,
+        temperature: 0.7,
+        maxOutputTokens: 500
+      });
+      
+      if (geminiResponse.usedFallback) {
+        console.log("Used fallback API key for chat");
+      }
+    } catch (error) {
+      if (error instanceof GeminiServiceError) {
+        console.error("Gemini service error:", error.message, error.status);
         return new Response(
-          JSON.stringify({ error: "Rate limits exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
+          { status: error.status === 429 ? 429 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: "Chat unavailable. Please try again." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw error;
     }
 
-    const data = await response.json();
-    const assistantResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!assistantResponse) {
-      return new Response(
-        JSON.stringify({ error: "Chat unavailable. Please try again." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const assistantResponse = geminiResponse.content;
 
     // Cache the response (only for non-first messages)
     if (!isFirstMessage && message) {
@@ -410,7 +392,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in verdict-assistant:", error);
     return new Response(
-      JSON.stringify({ error: "Chat unavailable. Please try again." }),
+      JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
       { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
