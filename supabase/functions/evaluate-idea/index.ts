@@ -1,26 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { callGeminiWithFallback, GeminiServiceError } from "../_shared/gemini.ts";
+import { callGeminiWithFallback, GeminiServiceError, isAIAvailable, getQuotaCooldownRemaining } from "../_shared/gemini.ts";
 
 // ============================================================================
-// SECURITY CONFIGURATION
+// SECURITY CONFIGURATION - MVP STRICT THROTTLING
 // ============================================================================
 
-// Rate limiting configuration (per IP and per user)
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW_IP = 10; // 10 requests per minute per IP
-const MAX_REQUESTS_PER_WINDOW_USER = 20; // 20 requests per minute per authenticated user
+// MVP Throttling: Max 1 evaluation per user per 5 minutes (strict)
+const EVAL_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_EVALS_PER_WINDOW_USER = 1; // 1 evaluation per 5 minutes per user
+
+// IP-based rate limiting (fallback for unauthenticated, stricter)
+const IP_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes  
+const MAX_EVALS_PER_WINDOW_IP = 1; // 1 evaluation per 5 minutes per IP
 
 // In-memory rate limit store (resets on function cold start)
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-// In-memory cache for identical submissions (cost control)
+// In-memory cache for identical submissions (extended for MVP cost control)
 const responseCache = new Map<string, { result: string; timestamp: number }>();
-const CACHE_TTL_MS = 300_000; // 5 minutes cache
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache (extended for MVP)
 
-// Rate limiter function
-const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
+// Rate limiter function with configurable window
+const checkRateLimit = (key: string, maxRequests: number, windowMs: number): { allowed: boolean; remaining: number; resetIn: number } => {
   const now = Date.now();
   const record = rateLimitStore.get(key);
   
@@ -33,8 +36,8 @@ const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; r
   
   if (!record || record.resetAt < now) {
     // New window
-    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: maxRequests - 1, resetIn: RATE_LIMIT_WINDOW_MS };
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, remaining: maxRequests - 1, resetIn: windowMs };
   }
   
   if (record.count >= maxRequests) {
@@ -462,13 +465,34 @@ serve(async (req) => {
   try {
     const clientIP = getClientIP(req);
     
-    // Check IP-based rate limit first
-    const ipRateLimit = checkRateLimit(`ip:${clientIP}`, MAX_REQUESTS_PER_WINDOW_IP);
-    if (!ipRateLimit.allowed) {
-      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
+    // QUOTA-AWARE GUARD: Check if AI is available before processing
+    if (!isAIAvailable()) {
+      const cooldownRemaining = getQuotaCooldownRemaining();
+      const minutesRemaining = Math.ceil(cooldownRemaining / 60000);
+      console.log(`AI unavailable - quota cooldown (${minutesRemaining} min remaining)`);
       return new Response(
         JSON.stringify({ 
-          error: "Rate limit exceeded. Please try again later.",
+          error: "AI is temporarily unavailable. Please try again later.",
+          retryAfter: Math.ceil(cooldownRemaining / 1000)
+        }),
+        { 
+          status: 503, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(cooldownRemaining / 1000))
+          } 
+        }
+      );
+    }
+    
+    // Check IP-based rate limit first (MVP: 1 per 5 minutes)
+    const ipRateLimit = checkRateLimit(`eval_ip:${clientIP}`, MAX_EVALS_PER_WINDOW_IP, IP_RATE_LIMIT_WINDOW_MS);
+    if (!ipRateLimit.allowed) {
+      console.warn(`Eval rate limit exceeded for IP: ${clientIP}`);
+      return new Response(
+        JSON.stringify({ 
+          error: "You can only evaluate one idea every 5 minutes. Please wait and try again.",
           retryAfter: Math.ceil(ipRateLimit.resetIn / 1000)
         }),
         { 
@@ -551,13 +575,13 @@ serve(async (req) => {
         if (!error && user) {
           userId = user.id;
           
-          // User-based rate limit
-          const userRateLimit = checkRateLimit(`user:${userId}`, MAX_REQUESTS_PER_WINDOW_USER);
+          // User-based rate limit (MVP: 1 evaluation per 5 minutes)
+          const userRateLimit = checkRateLimit(`eval_user:${userId}`, MAX_EVALS_PER_WINDOW_USER, EVAL_RATE_LIMIT_WINDOW_MS);
           if (!userRateLimit.allowed) {
-            console.warn(`Rate limit exceeded for user: ${userId}`);
+            console.warn(`Eval rate limit exceeded for user: ${userId}`);
             return new Response(
               JSON.stringify({ 
-                error: "Rate limit exceeded. Please try again later.",
+                error: "You can only evaluate one idea every 5 minutes. Please wait and try again.",
                 retryAfter: Math.ceil(userRateLimit.resetIn / 1000)
               }),
               { 

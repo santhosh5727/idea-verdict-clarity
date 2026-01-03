@@ -1,21 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { callGeminiWithFallback, GeminiServiceError } from "../_shared/gemini.ts";
+import { callGeminiWithFallback, GeminiServiceError, isAIAvailable, getQuotaCooldownRemaining } from "../_shared/gemini.ts";
 
 // ============================================================================
-// SECURITY CONFIGURATION
+// SECURITY CONFIGURATION - MVP THROTTLING
 // ============================================================================
 
-// Rate limiting configuration
+// Rate limiting configuration (per IP)
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW_IP = 15; // Structuring should be less frequent
+const MAX_REQUESTS_PER_WINDOW_IP = 5; // 5 structure requests per minute
 
 // In-memory rate limit store
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-// In-memory cache for identical submissions
+// In-memory cache for identical submissions (extended for MVP)
 const responseCache = new Map<string, { result: string; timestamp: number }>();
-const CACHE_TTL_MS = 300_000; // 5 minutes cache
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache for nova/structure
 
 const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
   const now = Date.now();
@@ -204,6 +204,22 @@ serve(async (req) => {
 
   try {
     const clientIP = getClientIP(req);
+    
+    // QUOTA-AWARE GUARD: Check if AI is available before processing
+    if (!isAIAvailable()) {
+      const cooldownRemaining = getQuotaCooldownRemaining();
+      const minutesRemaining = Math.ceil(cooldownRemaining / 60000);
+      console.log(`AI unavailable - quota cooldown (${minutesRemaining} min remaining)`);
+      return new Response(
+        JSON.stringify({ 
+          error: "AI is temporarily unavailable. Please try again later."
+        }),
+        { 
+          status: 503, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
     
     // Rate limiting
     const rateLimit = checkRateLimit(`ip:${clientIP}`, MAX_REQUESTS_PER_WINDOW_IP);

@@ -1,9 +1,19 @@
 // ============================================================================
-// SHARED GEMINI API UTILITY WITH MULTI-KEY FALLBACK
+// SHARED GEMINI API UTILITY WITH MULTI-KEY FALLBACK & QUOTA-AWARE GUARD
 // ============================================================================
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+
+// Quota cooldown configuration (MVP: 45 minutes cooldown after quota exhaustion)
+const QUOTA_COOLDOWN_MS = 45 * 60 * 1000; // 45 minutes
+
+// In-memory quota exhaustion state (resets on cold start, which is fine for MVP)
+interface QuotaState {
+  exhaustedAt: number;
+  bothKeysExhausted: boolean;
+}
+let quotaState: QuotaState | null = null;
 
 export interface GeminiRequest {
   prompt: string;
@@ -26,16 +36,70 @@ export interface GeminiError {
 }
 
 /**
+ * Check if we're in quota cooldown period
+ * Returns remaining cooldown time in ms, or 0 if not in cooldown
+ */
+export function getQuotaCooldownRemaining(): number {
+  if (!quotaState || !quotaState.bothKeysExhausted) {
+    return 0;
+  }
+  
+  const elapsed = Date.now() - quotaState.exhaustedAt;
+  const remaining = QUOTA_COOLDOWN_MS - elapsed;
+  
+  if (remaining <= 0) {
+    // Cooldown expired, reset state
+    quotaState = null;
+    console.log("Quota cooldown expired, allowing new requests");
+    return 0;
+  }
+  
+  return remaining;
+}
+
+/**
+ * Check if AI is available (not in quota cooldown)
+ */
+export function isAIAvailable(): boolean {
+  return getQuotaCooldownRemaining() === 0;
+}
+
+/**
+ * Mark both keys as quota exhausted, starting cooldown period
+ */
+function markQuotaExhausted(): void {
+  quotaState = {
+    exhaustedAt: Date.now(),
+    bothKeysExhausted: true
+  };
+  console.log(`Both API keys exhausted. Cooldown for ${QUOTA_COOLDOWN_MS / 60000} minutes`);
+}
+
+/**
  * Calls Gemini API with automatic fallback to secondary key on 429/quota errors.
  * 
  * Key logic:
- * 1. Try PRIMARY key first
- * 2. On 429/quota error, retry ONCE with SECONDARY key
- * 3. If both fail, return clean error (no provider details exposed)
+ * 1. Check quota cooldown first - block if in cooldown
+ * 2. Try PRIMARY key first
+ * 3. On 429/quota error, retry ONCE with SECONDARY key
+ * 4. If both fail, enter cooldown period and return clean error
  */
 export async function callGeminiWithFallback(
   request: GeminiRequest
 ): Promise<GeminiResponse> {
+  // QUOTA-AWARE GUARD: Check if we're in cooldown period
+  const cooldownRemaining = getQuotaCooldownRemaining();
+  if (cooldownRemaining > 0) {
+    const minutesRemaining = Math.ceil(cooldownRemaining / 60000);
+    console.log(`AI blocked - quota cooldown active (${minutesRemaining} min remaining)`);
+    throw new GeminiServiceError(
+      "AI is temporarily unavailable. Please try again later.",
+      503,
+      true, // Treat as quota exceeded for frontend handling
+      false
+    );
+  }
+
   const primaryKey = Deno.env.get("GEMINI_API_KEY_PRIMARY") || Deno.env.get("GEMINI_API_KEY");
   const secondaryKey = Deno.env.get("GEMINI_API_KEY_SECONDARY");
 
@@ -58,10 +122,14 @@ export async function callGeminiWithFallback(
         return { content: result, usedFallback: true };
       } catch (secondaryError) {
         console.error("Secondary key also failed:", secondaryError);
+        
+        // Both keys exhausted - enter cooldown period
+        markQuotaExhausted();
+        
         throw new GeminiServiceError(
           "AI is temporarily unavailable. Please try again later.",
           503,
-          false,
+          true,
           false
         );
       }
