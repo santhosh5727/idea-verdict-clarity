@@ -1,10 +1,96 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// ============================================================================
+// SECURITY CONFIGURATION
+// ============================================================================
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW_IP = 15; // Structuring should be less frequent
+
+// In-memory rate limit store
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
+  const now = Date.now();
+  const record = rateLimitStore.get(key);
+  
+  // Clean up expired entries
+  if (rateLimitStore.size > 10000) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (v.resetAt < now) rateLimitStore.delete(k);
+    }
+  }
+  
+  if (!record || record.resetAt < now) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: maxRequests - 1, resetIn: RATE_LIMIT_WINDOW_MS };
+  }
+  
+  if (record.count >= maxRequests) {
+    return { allowed: false, remaining: 0, resetIn: record.resetAt - now };
+  }
+  
+  record.count++;
+  return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetAt - now };
 };
+
+// Input validation schema with strict limits
+const requestSchema = z.object({
+  idea: z.string()
+    .min(50, "Idea description must be at least 50 characters")
+    .max(15000, "Idea description exceeds 15,000 characters")
+}).strict(); // Reject unexpected fields
+
+// Allowed origins
+const ALLOWED_ORIGINS = [
+  "https://ideaverdict.in",
+  "https://www.ideaverdict.in",
+  "https://lovable.dev",
+  "https://ideaverdictin.lovable.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https:\/\/[a-z0-9-]+\.lovable\.app$/,
+  /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/,
+  /^https:\/\/[a-z0-9-]+-preview--[a-z0-9-]+\.lovable\.app$/,
+];
+
+const isOriginAllowed = (origin: string): boolean => {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
+};
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const isAllowed = isOriginAllowed(origin);
+  
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+  };
+};
+
+const getClientIP = (req: Request): string => {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+         req.headers.get("x-real-ip") ||
+         req.headers.get("cf-connecting-ip") ||
+         "unknown";
+};
+
+const sanitizeText = (text: string): string => {
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
+};
+
+// ============================================================================
+// SYSTEM PROMPT
+// ============================================================================
 
 const SYSTEM_PROMPT = `You are Nova, an idea structuring assistant for IdeaVerdict.
 
@@ -41,24 +127,79 @@ Guidelines:
 
 IMPORTANT: Return ONLY valid JSON, no markdown, no explanations.`;
 
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
+
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const { idea } = await req.json();
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-    if (!idea || typeof idea !== "string" || idea.trim().length < 50) {
+  try {
+    const clientIP = getClientIP(req);
+    
+    // Rate limiting
+    const rateLimit = checkRateLimit(`ip:${clientIP}`, MAX_REQUESTS_PER_WINDOW_IP);
+    if (!rateLimit.allowed) {
+      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
       return new Response(
-        JSON.stringify({ error: "Please provide a more detailed idea description" }),
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please try again later.",
+          retryAfter: Math.ceil(rateLimit.resetIn / 1000)
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(rateLimit.resetIn / 1000))
+          } 
+        }
+      );
+    }
+
+    // Parse and validate request
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+    }
+
+    const parseResult = requestSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => `${e.path.join(".")}: ${e.message}`);
+      console.warn("Validation failed:", errors);
+      return new Response(
+        JSON.stringify({ error: "Validation failed", details: errors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    const idea = sanitizeText(parseResult.data.idea);
+    
+    console.log("Structure request:", { ideaLength: idea.length, clientIP: clientIP.substring(0, 10) + "..." });
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+      console.error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Service configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -71,7 +212,7 @@ serve(async (req) => {
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Structure this idea:\n\n${idea.trim()}` },
+          { role: "user", content: `Structure this idea:\n\n${idea}` },
         ],
       }),
     });
@@ -85,7 +226,7 @@ serve(async (req) => {
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+          JSON.stringify({ error: "AI credits exhausted." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -104,7 +245,6 @@ serve(async (req) => {
     // Parse the JSON response
     let structured;
     try {
-      // Clean up potential markdown formatting
       const cleanContent = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       structured = JSON.parse(cleanContent);
     } catch (parseError) {
@@ -112,23 +252,34 @@ serve(async (req) => {
       throw new Error("Failed to parse structured idea");
     }
 
-    // Validate the response has required fields
+    // Validate and sanitize response fields
     const requiredFields = ["problem", "solution", "targetUsers", "differentiation", "workflow"];
     for (const field of requiredFields) {
       if (!structured[field] || typeof structured[field] !== "string") {
         structured[field] = "";
+      } else {
+        // Sanitize and limit each field
+        structured[field] = sanitizeText(structured[field]).substring(0, 5000);
       }
     }
 
+    console.log("Structure complete");
+
     return new Response(
       JSON.stringify({ structured }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/json",
+          "X-RateLimit-Remaining": String(rateLimit.remaining)
+        } 
+      }
     );
   } catch (error) {
     console.error("Nova error:", error);
     return new Response(
       JSON.stringify({ error: "Failed to structure idea. Please try again." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
