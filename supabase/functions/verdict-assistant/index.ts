@@ -12,6 +12,10 @@ const MAX_REQUESTS_PER_WINDOW_IP = 30; // Chat can be more frequent
 // In-memory rate limit store
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
+// Simple response cache for repeated questions
+const responseCache = new Map<string, { result: string; timestamp: number }>();
+const CACHE_TTL_MS = 180_000; // 3 minutes cache for chat
+
 const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; remaining: number; resetIn: number } => {
   const now = Date.now();
   const record = rateLimitStore.get(key);
@@ -35,20 +39,53 @@ const checkRateLimit = (key: string, maxRequests: number): { allowed: boolean; r
   return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetAt - now };
 };
 
+// Generate cache key for chat
+const generateCacheKey = (message: string, verdictType: string): string => {
+  const content = `${message}|${verdictType}`.toLowerCase().trim().substring(0, 200);
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `chat_${hash}`;
+};
+
+// Check cache
+const getCachedResponse = (key: string): string | null => {
+  const cached = responseCache.get(key);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    return cached.result;
+  }
+  if (cached) responseCache.delete(key);
+  return null;
+};
+
+// Set cache
+const setCachedResponse = (key: string, result: string): void => {
+  if (responseCache.size > 1000) {
+    const now = Date.now();
+    for (const [k, v] of responseCache.entries()) {
+      if (now - v.timestamp > CACHE_TTL_MS) responseCache.delete(k);
+    }
+  }
+  responseCache.set(key, { result, timestamp: Date.now() });
+};
+
 // Input validation schema
 const conversationMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().max(5000)
+  content: z.string().max(2000) // Reduced for cost control
 });
 
 const requestSchema = z.object({
-  message: z.string().max(2000).optional(),
-  verdict_text: z.string().max(50000).optional(),
-  verdict: z.string().max(50000).optional(),
+  message: z.string().max(1000).optional(), // Reduced for cost control
+  verdict_text: z.string().max(20000).optional(), // Reduced
+  verdict: z.string().max(20000).optional(),
   verdict_type: z.string().max(50).optional(),
   verdictType: z.string().max(50).optional(),
-  idea_problem: z.string().max(15000).optional(),
-  conversationHistory: z.array(conversationMessageSchema).max(50).optional(),
+  idea_problem: z.string().max(5000).optional(), // Reduced
+  conversationHistory: z.array(conversationMessageSchema).max(20).optional(), // Reduced
   isFirstMessage: z.boolean().optional()
 }).strict();
 
@@ -74,7 +111,7 @@ const isOriginAllowed = (origin: string): boolean => {
   return ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
 };
 
-// Security headers for all responses (OWASP best practices)
+// Security headers
 const getSecurityHeaders = () => ({
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -110,6 +147,12 @@ const sanitizeText = (text: string): string => {
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
 };
 
+// Truncate for cost control
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
+};
+
 // ============================================================================
 // PROMPT BUILDER
 // ============================================================================
@@ -120,33 +163,32 @@ const buildSystemPrompt = (
   score: string,
   fullEvaluation: string
 ) => {
+  // Truncate evaluation for cost control
+  const truncatedEval = truncateText(fullEvaluation, 3000);
+  
   return `You are a friendly Verdict Assistant helping users understand their startup idea evaluation.
 
-CONTEXT - THE IDEA BEING EVALUATED:
-"${ideaProblem}"
+CONTEXT - THE IDEA:
+"${truncateText(ideaProblem, 500)}"
 
-VERDICT RESULT: ${verdictType}
-IDEA STRENGTH SCORE: ${score}%
+VERDICT: ${verdictType}
+SCORE: ${score}%
 
-FULL EVALUATION:
-${fullEvaluation}
+EVALUATION SUMMARY:
+${truncatedEval}
 
 YOUR ROLE:
-- Answer questions about this specific evaluation conversationally and helpfully
+- Answer questions about this evaluation conversationally
 - Reference specific parts of the evaluation when relevant
-- Quote actual reasoning from the evaluation to back up your points
-- Be conversational, not robotic - use a friendly, helpful tone
-- Ask clarifying questions when needed
+- Be friendly and helpful, not robotic
 - Keep responses concise (2-3 paragraphs max)
 
 STRICT RULES:
 - NEVER suggest new ideas or pivots
-- NEVER do re-evaluations or give new scores
+- NEVER re-evaluate or give new scores
 - NEVER change or challenge the verdict
 - ONLY discuss and explain the existing evaluation
-- If asked to re-score or change verdict, politely explain the verdict is final and offer to clarify it instead
-
-Remember: Be helpful and conversational, like a knowledgeable friend explaining the evaluation.`;
+- If asked to re-score, politely explain the verdict is final`;
 };
 
 const parseScoreFromEvaluation = (fullEvaluation: string): string => {
@@ -228,11 +270,11 @@ serve(async (req) => {
 
     const body = parseResult.data;
     
-    const message = sanitizeText(body.message || "");
-    const verdictText = body.verdict_text || body.verdict || "";
+    const message = truncateText(sanitizeText(body.message || ""), 500);
+    const verdictText = truncateText(body.verdict_text || body.verdict || "", 5000);
     const verdictType = body.verdict_type || body.verdictType || "UNKNOWN";
-    const ideaProblem = sanitizeText(body.idea_problem || "");
-    const conversationHistory = body.conversationHistory || [];
+    const ideaProblem = truncateText(sanitizeText(body.idea_problem || ""), 1000);
+    const conversationHistory = (body.conversationHistory || []).slice(-10); // Keep only last 10 messages
     const isFirstMessage = body.isFirstMessage || false;
 
     console.log("Chat request:", { 
@@ -250,9 +292,22 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+    // Check cache for non-first messages
+    if (!isFirstMessage && message) {
+      const cacheKey = generateCacheKey(message, verdictType);
+      const cachedResult = getCachedResponse(cacheKey);
+      if (cachedResult) {
+        console.log("Cache hit for chat");
+        return new Response(
+          JSON.stringify({ response: cachedResult }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" } }
+        );
+      }
+    }
+
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "Chat unavailable. Please try again later." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -262,29 +317,24 @@ serve(async (req) => {
     const score = parseScoreFromEvaluation(verdictText);
     const systemPrompt = buildSystemPrompt(ideaProblem, verdictType, score, verdictText);
 
-    const messages: { role: string; content: string }[] = [
-      { role: "system", content: systemPrompt },
-    ];
+    // Build conversation for Gemini
+    let conversationText = "";
     
-    // Add sanitized conversation history
+    // Add history (limited)
     if (Array.isArray(conversationHistory)) {
-      for (const msg of conversationHistory) {
+      for (const msg of conversationHistory.slice(-5)) { // Only last 5 messages for cost control
         if (msg.role && msg.content) {
-          messages.push({ 
-            role: msg.role, 
-            content: sanitizeText(msg.content).substring(0, 5000) 
-          });
+          const role = msg.role === "user" ? "User" : "Assistant";
+          conversationText += `${role}: ${truncateText(sanitizeText(msg.content), 500)}\n\n`;
         }
       }
     }
 
+    let userMessage: string;
     if (isFirstMessage) {
       const verdictLabel = verdictType === "build" ? "BUILD" : 
                           verdictType === "narrow" ? "NARROW" : "DO NOT BUILD";
-      messages.push({ 
-        role: "user", 
-        content: `Generate a brief, friendly greeting introducing yourself and the evaluation result. The verdict is ${verdictLabel} with a score of ${score}%. Invite them to ask questions. Keep it to 2-3 sentences.` 
-      });
+      userMessage = `Generate a brief, friendly greeting introducing yourself and the evaluation result. The verdict is ${verdictLabel} with a score of ${score}%. Invite them to ask questions. Keep it to 2-3 sentences.`;
     } else {
       if (message.length < 3) {
         return new Response(
@@ -292,18 +342,26 @@ serve(async (req) => {
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      messages.push({ role: "user", content: message.substring(0, 2000) });
+      userMessage = message;
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Call Google Gemini API
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages,
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemPrompt}\n\n---\n\nConversation so far:\n${conversationText}\n\nUser: ${userMessage}` }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 500 // Keep responses short for cost control
+        }
       }),
     });
 
@@ -314,14 +372,8 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("Gemini API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "Chat unavailable. Please try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -329,7 +381,7 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const assistantResponse = data.choices?.[0]?.message?.content;
+    const assistantResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!assistantResponse) {
       return new Response(
@@ -338,13 +390,20 @@ serve(async (req) => {
       );
     }
 
+    // Cache the response (only for non-first messages)
+    if (!isFirstMessage && message) {
+      const cacheKey = generateCacheKey(message, verdictType);
+      setCachedResponse(cacheKey, assistantResponse);
+    }
+
     return new Response(
       JSON.stringify({ response: assistantResponse }),
       { 
         headers: { 
           ...corsHeaders, 
           "Content-Type": "application/json",
-          "X-RateLimit-Remaining": String(rateLimit.remaining)
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "X-Cache": "MISS"
         } 
       }
     );
