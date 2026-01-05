@@ -214,6 +214,11 @@ const Evaluate = () => {
           if (response.status === 401) {
             toast.error("Please log in to evaluate your idea.");
             navigate("/auth");
+          } else if (response.status === 503) {
+            // AI quota exhausted - show calm message
+            toast.info("AI is resting. Please try again in a few minutes.", {
+              duration: 5000,
+            });
           } else if (response.status === 429) {
             toast.error("Rate limit exceeded. Please try again in a moment.");
           } else if (response.status === 402) {
