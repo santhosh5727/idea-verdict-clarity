@@ -36,7 +36,12 @@ const NovaAssistant = () => {
 
       if (error) {
         console.error("Nova error:", error);
-        if (error.message?.includes("429")) {
+        // Check for quota/503 errors first (AI temporarily unavailable)
+        if (error.message?.includes("503") || error.message?.includes("non-2xx")) {
+          toast.info("AI is resting. Please try again in a few minutes.", {
+            duration: 5000,
+          });
+        } else if (error.message?.includes("429")) {
           toast.error("Rate limit exceeded. Please try again in a moment.");
         } else if (error.message?.includes("402")) {
           toast.error("AI credits exhausted. Please add funds to continue.");
