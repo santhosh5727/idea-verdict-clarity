@@ -322,15 +322,6 @@ serve(async (req) => {
       }
     }
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY_PRIMARY") || Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      console.error("GEMINI_API_KEY is not configured");
-      return new Response(
-        JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const score = parseScoreFromEvaluation(verdictText);
     const systemPrompt = buildSystemPrompt(ideaProblem, verdictType, score, verdictText);
 
@@ -377,10 +368,11 @@ serve(async (req) => {
       }
     } catch (error) {
       if (error instanceof GeminiServiceError) {
-        console.error("Gemini service error:", error.message, error.status);
+        console.error("AI service error:", error.message, error.status);
+        const statusCode = [429, 402, 503].includes(error.status) ? error.status : 503;
         return new Response(
-          JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
-          { status: error.status === 429 ? 429 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: error.message }),
+          { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       throw error;
