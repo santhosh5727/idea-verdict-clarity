@@ -653,10 +653,11 @@ serve(async (req) => {
       }
     } catch (error) {
       if (error instanceof GeminiServiceError) {
-        console.error("Gemini service error:", error.message, error.status);
+        console.error("AI service error:", error.message, error.status);
+        const statusCode = [429, 402, 503].includes(error.status) ? error.status : 503;
         return new Response(
-          JSON.stringify({ error: "AI is temporarily unavailable. Please try again later." }),
-          { status: error.status === 429 ? 429 : 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: error.message }),
+          { status: statusCode, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       throw error;
