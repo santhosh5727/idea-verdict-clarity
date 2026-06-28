@@ -12,6 +12,32 @@ import AmbientAnimation from "@/components/AmbientAnimation";
 import NovaAssistant from "@/components/NovaAssistant";
 import { useAuth } from "@/hooks/useAuth";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
+
+const FAQ_ITEMS = [
+  {
+    q: "How do I know if my startup idea is good?",
+    a: "A good startup idea solves a real problem for a specific audience, has a clear path to monetization, and offers something competitors don't. IdeaVerdict analyzes these factors and gives you an honest verdict — Build, Narrow, or Kill — so you know where you stand before investing time and money.",
+  },
+  {
+    q: "Should I build my startup idea or drop it?",
+    a: "That depends on problem-solution fit, target market clarity, and competitive differentiation. Instead of guessing, use IdeaVerdict to get structured AI feedback. You'll receive a clear recommendation with reasoning — helping you decide whether to move forward, refine your approach, or pivot to a better idea.",
+  },
+  {
+    q: "How to validate a business idea quickly?",
+    a: "Traditional validation takes weeks of customer interviews and market research. IdeaVerdict speeds this up by evaluating your problem statement, solution, target users, and differentiation in minutes. It's not a replacement for real customer feedback, but it's the fastest way to stress-test your idea before you build anything.",
+  },
+];
+
+const FAQ_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ_ITEMS.map(({ q, a }) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+};
 
 const Index = () => {
   const { user, signOut } = useAuth();
@@ -31,6 +57,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="IdeaVerdict – Build or Kill Your Startup Idea"
+        description="Evaluate your startup idea in minutes. Get honest AI-powered feedback on whether to build, narrow, or kill your idea before wasting months."
+        path="/"
+        jsonLd={FAQ_JSONLD}
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">

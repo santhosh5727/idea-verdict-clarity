@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 const PROJECT_TYPES = [
   { 
@@ -355,6 +356,11 @@ const Evaluate = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Evaluate Your Startup Idea – IdeaVerdict"
+        description="Answer a few quick prompts about your idea and get an honest AI verdict — Build, Narrow, or Kill — in minutes."
+        path="/evaluate"
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">

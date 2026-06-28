@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 import { toast } from "sonner";
 import { parseViabilityScore, parseExecutionDifficulty, parseExecutionTimeEstimate, getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 import { Gauge, Zap } from "lucide-react";
@@ -307,6 +308,12 @@ const Results = () => {
 
   return (
     <div className="min-h-screen">
+      <SEO
+        title={`${inputs?.projectName ? `${inputs.projectName} – ` : ""}Evaluation Result – IdeaVerdict`}
+        description="See your IdeaVerdict score, verdict, and full evaluation breakdown for your startup idea."
+        path="/results"
+        noindex
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
@@ -335,7 +342,7 @@ const Results = () => {
             {/* Project Name Header */}
             {inputs?.projectName && (
               <div className="mb-4 text-center">
-                <h2 className="text-lg font-semibold text-foreground">{inputs.projectName}</h2>
+                <h1 className="text-lg font-semibold text-foreground">{inputs.projectName}</h1>
               </div>
             )}
 

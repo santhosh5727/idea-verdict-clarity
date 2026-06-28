@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
 import { getDefinitiveVerdict, getVerdictConfig, parseViabilityScore, VerdictType } from "@/lib/verdictUtils";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 interface Evaluation {
   id: string;
@@ -98,6 +99,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen">
+      <SEO
+        title="Your Ideas Dashboard – IdeaVerdict"
+        description="Track every startup idea you've stress-tested with IdeaVerdict and revisit each Build, Narrow, or Kill verdict in one place."
+        path="/dashboard"
+        noindex
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
@@ -130,6 +137,7 @@ const Dashboard = () => {
           </div>
 
           {/* Stats */}
+          <h2 className="sr-only">Evaluation statistics</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-4">
             {/* Build */}
             <div className="rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/40 transition-all duration-300">
@@ -185,6 +193,7 @@ const Dashboard = () => {
           </div>
 
           {/* Ideas List */}
+          <h2 className="sr-only">Your evaluated ideas</h2>
           <div className="space-y-4">
             {loading ? (
               <div className="flex justify-center py-12">

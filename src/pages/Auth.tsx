@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -108,6 +109,12 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
+      <SEO
+        title="Sign in to IdeaVerdict"
+        description="Sign in or create your IdeaVerdict account to evaluate startup ideas with honest AI feedback."
+        path="/auth"
+        noindex
+      />
       {/* Left Panel - Form */}
       <div className="flex flex-col justify-center px-6 py-12 lg:px-12 xl:px-20 bg-gradient-to-br from-primary/5 via-background to-background">
         <div className="mx-auto w-full max-w-md">
@@ -176,6 +183,8 @@ const Auth = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
