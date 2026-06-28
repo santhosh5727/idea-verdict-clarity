@@ -57,6 +57,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="IdeaVerdict – Build or Kill Your Startup Idea"
+        description="Evaluate your startup idea in minutes. Get honest AI-powered feedback on whether to build, narrow, or kill your idea before wasting months."
+        path="/"
+        jsonLd={FAQ_JSONLD}
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
