@@ -109,6 +109,12 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
+      <SEO
+        title="Sign in to IdeaVerdict"
+        description="Sign in or create your IdeaVerdict account to evaluate startup ideas with honest AI feedback."
+        path="/auth"
+        noindex
+      />
       {/* Left Panel - Form */}
       <div className="flex flex-col justify-center px-6 py-12 lg:px-12 xl:px-20 bg-gradient-to-br from-primary/5 via-background to-background">
         <div className="mx-auto w-full max-w-md">

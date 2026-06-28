@@ -99,6 +99,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen">
+      <SEO
+        title="Your Ideas Dashboard – IdeaVerdict"
+        description="Track every startup idea you've stress-tested with IdeaVerdict and revisit each Build, Narrow, or Kill verdict in one place."
+        path="/dashboard"
+        noindex
+      />
       {/* Navbar */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
