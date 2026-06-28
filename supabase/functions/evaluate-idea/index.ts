@@ -559,45 +559,56 @@ serve(async (req) => {
       );
     }
 
-    // Check user-based rate limit if authenticated
+    // Require authentication for all evaluation requests
     const authHeader = req.headers.get("authorization");
-    let userId: string | null = null;
-    
-    if (authHeader?.startsWith("Bearer ")) {
-      try {
-        const supabaseClient = createClient(
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let userId: string;
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      );
+      const { data: { user }, error } = await supabaseClient.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (error || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-        const { data: { user }, error } = await supabaseClient.auth.getUser(
-          authHeader.replace("Bearer ", "")
-        );
-        if (!error && user) {
-          userId = user.id;
-          
-          // User-based rate limit (MVP: 1 evaluation per 5 minutes)
-          const userRateLimit = checkRateLimit(`eval_user:${userId}`, MAX_EVALS_PER_WINDOW_USER, EVAL_RATE_LIMIT_WINDOW_MS);
-          if (!userRateLimit.allowed) {
-            console.warn(`Eval rate limit exceeded for user: ${userId}`);
-            return new Response(
-              JSON.stringify({ 
-                error: "You can only evaluate one idea every 5 minutes. Please wait and try again.",
-                retryAfter: Math.ceil(userRateLimit.resetIn / 1000)
-              }),
-              { 
-                status: 429, 
-                headers: { 
-                  ...corsHeaders, 
-                  "Content-Type": "application/json",
-                  "Retry-After": String(Math.ceil(userRateLimit.resetIn / 1000))
-                } 
-              }
-            );
+      }
+      userId = user.id;
+    } catch (_authError) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // User-based rate limit (MVP: 1 evaluation per 5 minutes)
+    const userRateLimit = checkRateLimit(`eval_user:${userId}`, MAX_EVALS_PER_WINDOW_USER, EVAL_RATE_LIMIT_WINDOW_MS);
+    if (!userRateLimit.allowed) {
+      console.warn(`Eval rate limit exceeded for user: ${userId}`);
+      return new Response(
+        JSON.stringify({
+          error: "You can only evaluate one idea every 5 minutes. Please wait and try again.",
+          retryAfter: Math.ceil(userRateLimit.resetIn / 1000)
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(userRateLimit.resetIn / 1000))
           }
         }
-      } catch (authError) {
-        console.warn("Auth verification failed:", authError);
-      }
+      );
     }
 
     // Log request (without sensitive data)

@@ -9,7 +9,7 @@ import StepIndicator from "@/components/StepIndicator";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { logError } from "@/lib/logger";
+import { logError, logInfo } from "@/lib/logger";
 import logo from "@/assets/logo.png";
 import SEO from "@/components/SEO";
 
@@ -232,21 +232,17 @@ const Evaluate = () => {
         }
 
         const result = await response.json();
-        
-        // Debug logging for score pass-through
-        console.log("=== API RESPONSE DEBUG ===");
-        console.log("Full result:", result);
-        console.log("result.viabilityScore:", result.viabilityScore);
-        console.log("result.executionDifficulty:", result.executionDifficulty);
-        
+
+        logInfo("API response received", {
+          hasViabilityScore: typeof result.viabilityScore === 'number',
+          hasExecutionDifficulty: !!result.executionDifficulty,
+        });
+
         // Extract and validate scores explicitly
-        const viabilityScore = typeof result.viabilityScore === 'number' 
-          ? result.viabilityScore 
+        const viabilityScore = typeof result.viabilityScore === 'number'
+          ? result.viabilityScore
           : null;
         const executionDifficulty = result.executionDifficulty || "MEDIUM";
-        
-        console.log("Extracted viabilityScore:", viabilityScore);
-        console.log("Extracted executionDifficulty:", executionDifficulty);
         
         // Save evaluation to database
         if (user) {
