@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { callGeminiWithFallback, GeminiServiceError, isAIAvailable, getQuotaCooldownRemaining } from "../_shared/gemini.ts";
 
@@ -227,6 +228,37 @@ serve(async (req) => {
 
   try {
     const clientIP = getClientIP(req);
+
+    // Require authentication
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+      );
+      const { data: { user }, error } = await supabaseClient.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (error || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch (_authError) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    
     
     // QUOTA-AWARE GUARD: Check if AI is available before processing
     if (!isAIAvailable()) {
