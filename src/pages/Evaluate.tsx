@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/lib/logger";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 const PROJECT_TYPES = [
   { 

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
 import { getDefinitiveVerdict, getVerdictConfig, parseViabilityScore, VerdictType } from "@/lib/verdictUtils";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 interface Evaluation {
   id: string;

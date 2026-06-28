@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);

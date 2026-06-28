@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import VerdictChatAssistant from "@/components/VerdictChatAssistant";
 
 import logo from "@/assets/logo.png";
+import SEO from "@/components/SEO";
 import { toast } from "sonner";
 import { parseViabilityScore, parseExecutionDifficulty, parseExecutionTimeEstimate, getDefinitiveVerdict, getVerdictConfig } from "@/lib/verdictUtils";
 import { Gauge, Zap } from "lucide-react";
