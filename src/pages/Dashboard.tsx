@@ -130,6 +130,7 @@ const Dashboard = () => {
           </div>
 
           {/* Stats */}
+          <h2 className="sr-only">Evaluation statistics</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-4">
             {/* Build */}
             <div className="rounded-xl border border-primary/20 bg-card/90 backdrop-blur-sm p-5 shadow-card hover:shadow-lg hover:border-primary/40 transition-all duration-300">
@@ -185,6 +186,7 @@ const Dashboard = () => {
           </div>
 
           {/* Ideas List */}
+          <h2 className="sr-only">Your evaluated ideas</h2>
           <div className="space-y-4">
             {loading ? (
               <div className="flex justify-center py-12">

@@ -335,7 +335,7 @@ const Results = () => {
             {/* Project Name Header */}
             {inputs?.projectName && (
               <div className="mb-4 text-center">
-                <h2 className="text-lg font-semibold text-foreground">{inputs.projectName}</h2>
+                <h1 className="text-lg font-semibold text-foreground">{inputs.projectName}</h1>
               </div>
             )}
 
